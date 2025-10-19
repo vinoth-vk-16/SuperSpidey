@@ -3,6 +3,7 @@ uvicorn[standard]
 firebase-admin
 pydantic
 python-dotenv
+gunicorn
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client

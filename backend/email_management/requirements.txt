@@ -6,3 +6,4 @@ google-api-python-client
 firebase-admin
 pydantic
 python-dotenv
+gunicorn
