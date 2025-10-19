@@ -121,14 +121,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'email',
         'https://www.googleapis.com/auth/gmail.modify',
         'https://www.googleapis.com/auth/gmail.readonly'
-      ]
+      ],
+      accessType: 'offline',  // Always request refresh token
+      prompt: 'consent'       // Force consent screen to ensure refresh token
     })
   );
 
   app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/login' }),
-    (req, res) => {
+    async (req, res) => {
       console.log("Authentication successful, user:", req.user);
+
+      try {
+        const user = req.user as any;
+
+        // Only store OAuth credentials if we have both access and refresh tokens
+        if (user.accessToken && user.refreshToken) {
+          console.log('Storing OAuth credentials for user:', user.email);
+
+          // Store OAuth credentials in Firestore via the OAuth storage service
+          const storeAuthResponse = await fetch('http://localhost:8000/store-auth', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_email: user.email,
+              oauth_token: user.accessToken,
+              refresh_token: user.refreshToken,
+            }),
+          });
+
+          if (!storeAuthResponse.ok) {
+            console.error('Failed to store OAuth credentials:', await storeAuthResponse.text());
+            // Continue with authentication even if storage fails
+          } else {
+            console.log('OAuth credentials stored successfully for user:', user.email);
+          }
+        } else {
+          console.log('Skipping OAuth storage - missing tokens. AccessToken:', !!user.accessToken, 'RefreshToken:', !!user.refreshToken);
+        }
+      } catch (error) {
+        console.error('Error storing OAuth credentials:', error);
+        // Continue with authentication even if storage fails
+      }
+
       // Successful authentication, redirect to home
       res.redirect('/');
     }
