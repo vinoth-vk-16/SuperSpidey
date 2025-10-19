@@ -1,10 +1,8 @@
 fastapi
 uvicorn[standard]
-gunicorn
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 firebase-admin
 pydantic
 python-dotenv
-requests

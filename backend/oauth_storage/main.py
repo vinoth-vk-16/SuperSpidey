@@ -98,8 +98,6 @@ async def health_check():
     """
     return {"status": "healthy"}
 
-# Only run uvicorn when called directly (development)
-# Gunicorn will import the app directly (production)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
