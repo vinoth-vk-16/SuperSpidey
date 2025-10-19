@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import requests
 import google.auth.transport.requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -55,33 +54,94 @@ class SendEmailRequest(BaseModel):
     bcc: Optional[List[str]] = None
     cc: Optional[List[str]] = None
 
+class FetchEmailsRequest(BaseModel):
+    user_email: str
+    page: int = 1  # Page number starting from 1
+
+class RefreshEmailsRequest(BaseModel):
+    user_email: str
+
 class EmailResponse(BaseModel):
     message_id: str
     success: bool
 
+class EmailData(BaseModel):
+    messageId: str
+    threadId: str
+    from_: str  # 'from' is a reserved keyword in Python
+    to: List[str]
+    subject: str
+    snippet: str
+    body: str
+    headers: Dict[str, Any]
+    labels: List[str]
+    isRead: bool
+    isSent: bool
+    timestamp: str  # ISO format string
+    threadMessagesCount: int
+    cc: Optional[List[str]] = None
+    bcc: Optional[List[str]] = None
+
+class FetchEmailsResponse(BaseModel):
+    emails: List[EmailData]
+    total_count: int
+    page: int
+    has_more: bool
+
+class RefreshEmailsResponse(BaseModel):
+    message: str
+    emails_synced: int
+    last_sync_timestamp: str
+
+class GmailWebhookRequest(BaseModel):
+    message: Dict[str, Any]
+    subscription: str
+
 def get_user_credentials(user_email: str):
-    """Get user OAuth credentials from the oauth storage service"""
+    """Get user OAuth credentials directly from Firestore"""
     try:
-        response = requests.get(f'http://localhost:8000/get-auth/{user_email}')
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
+        # Reference to the document with user email as ID
+        doc_ref = db.collection('google_oauth_credentials').document(user_email)
+
+        # Get the document
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="OAuth credentials not found for this user")
+
+        data = doc.to_dict()
+
+        return {
+            'oauth': data.get('oauth', ''),
+            'refresh_token': data.get('refresh_token')
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve user credentials: {str(e)}")
 
 def store_updated_credentials(user_email: str, access_token: str, refresh_token: Optional[str] = None):
-    """Store updated OAuth credentials"""
+    """Store updated OAuth credentials directly in Firestore"""
     try:
-        data = {
-            "user_email": user_email,
-            "oauth_token": access_token
-        }
-        if refresh_token:
-            data["refresh_token"] = refresh_token
+        # Reference to the document with user email as ID
+        doc_ref = db.collection('google_oauth_credentials').document(user_email)
 
-        response = requests.post('http://localhost:8000/store-auth', json=data)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
+        # Data to store
+        oauth_data = {
+            'oauth': access_token,
+        }
+
+        # Only include refresh_token if it exists
+        if refresh_token:
+            oauth_data['refresh_token'] = refresh_token
+
+        # Set the document
+        doc_ref.set(oauth_data)
+
+        print(f"Updated OAuth credentials for user: {user_email}")
+        return {"message": "OAuth credentials updated successfully", "user_email": user_email}
+    except Exception as e:
         print(f"Warning: Failed to store updated credentials: {str(e)}")
 
 def refresh_access_token(refresh_token: str):
@@ -206,6 +266,523 @@ def store_email_in_firestore(user_email: str, message_id: str, email_data: Dict[
         print(f"Error storing email in Firestore: {e}")
         return False
 
+def fetch_user_emails(user_email: str, page: int = 1, per_page: int = 30):
+    """Fetch paginated emails for a user from Firestore"""
+    try:
+        # Reference to user's emails subcollection
+        emails_ref = db.collection('users').document(user_email).collection('emails')
+
+        # Get total count first
+        total_count = 0
+        for _ in emails_ref.stream():
+            total_count += 1
+
+        # Calculate offset and limit
+        offset = (page - 1) * per_page
+        limit = per_page
+
+        # Query emails ordered by timestamp descending (most recent first)
+        query = emails_ref.order_by('timestamp', direction=firestore.Query.DESCENDING)
+
+        # Get all emails (since Firestore doesn't have efficient offset)
+        all_emails = []
+        for doc in query.stream():
+            email_data = doc.to_dict()
+            all_emails.append({
+                'id': doc.id,
+                'data': email_data
+            })
+
+        # Apply pagination manually
+        paginated_emails = all_emails[offset:offset + limit]
+
+        # Convert to response format
+        emails = []
+        for email in paginated_emails:
+            email_data = email['data']
+            email_obj = EmailData(
+                messageId=email_data.get('messageId', ''),
+                threadId=email_data.get('threadId', ''),
+                from_=email_data.get('from', ''),
+                to=email_data.get('to', []),
+                subject=email_data.get('subject', ''),
+                snippet=email_data.get('snippet', ''),
+                body=email_data.get('body', ''),
+                headers=email_data.get('headers', {}),
+                labels=email_data.get('labels', []),
+                isRead=email_data.get('isRead', False),
+                isSent=email_data.get('isSent', False),
+                timestamp=email_data.get('timestamp', datetime.now()).isoformat() if hasattr(email_data.get('timestamp'), 'isoformat') else str(email_data.get('timestamp', '')),
+                threadMessagesCount=email_data.get('threadMessagesCount', 1)
+            )
+
+            # Add optional fields
+            if email_data.get('cc'):
+                email_obj.cc = email_data['cc']
+            if email_data.get('bcc'):
+                email_obj.bcc = email_data['bcc']
+
+            emails.append(email_obj)
+
+        # Check if there are more pages
+        has_more = offset + limit < total_count
+
+        return FetchEmailsResponse(
+            emails=emails,
+            total_count=total_count,
+            page=page,
+            has_more=has_more
+        )
+
+    except Exception as e:
+        print(f"Error fetching emails for user {user_email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch emails: {str(e)}")
+
+def refresh_user_emails_from_gmail(user_email: str):
+    """Refresh emails for a user from Gmail API after lastSyncTimestamp"""
+    try:
+        # Check if user exists in Firestore
+        user_ref = db.collection('users').document(user_email)
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            return RefreshEmailsResponse(
+                message="no emails present",
+                emails_synced=0,
+                last_sync_timestamp=""
+            )
+
+        user_data = user_doc.to_dict()
+        last_sync_timestamp = user_data.get('lastSyncTimestamp')
+
+        if not last_sync_timestamp:
+            # If no lastSyncTimestamp, use a default (e.g., 30 days ago)
+            from datetime import datetime, timedelta
+            last_sync_timestamp = datetime.now() - timedelta(days=30)
+
+        # Get user credentials
+        user_creds = get_user_credentials(user_email)
+
+        if not user_creds.get('oauth'):
+            raise HTTPException(status_code=404, detail="User credentials not found")
+
+        # Create OAuth2 credentials
+        creds = Credentials(
+            token=user_creds['oauth'],
+            refresh_token=user_creds.get('refresh_token'),
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=google_config.get('client_id'),
+            client_secret=google_config.get('client_secret')
+        )
+
+        # Refresh token if expired
+        if creds.expired and creds.refresh_token:
+            creds.refresh(google.auth.transport.requests.Request())
+            # Store updated credentials
+            store_updated_credentials(
+                user_email,
+                creds.token,
+                creds.refresh_token
+            )
+
+        # Build Gmail service
+        service = build('gmail', 'v1', credentials=creds)
+
+        # Convert timestamp to Gmail query format (Unix timestamp)
+        if hasattr(last_sync_timestamp, 'timestamp'):
+            # Firestore timestamp - convert to Unix timestamp
+            query_timestamp = int(last_sync_timestamp.timestamp())
+        else:
+            # datetime object - convert to Unix timestamp
+            query_timestamp = int(last_sync_timestamp.timestamp())
+
+        # Get all existing thread IDs from Firestore for comparison
+        existing_thread_ids = set()
+        emails_ref = user_ref.collection('emails')
+
+        for doc in emails_ref.stream():
+            email_data = doc.to_dict()
+            thread_id = email_data.get('threadId')
+            if thread_id:
+                existing_thread_ids.add(thread_id)
+
+        print(f"Found {len(existing_thread_ids)} existing thread IDs in database")
+
+        # Step 1: Fetch ALL emails after lastSyncTimestamp (no filtering yet)
+        query = f'after:{query_timestamp}'
+        print(f"Step 1: Fetching ALL emails after timestamp with query: {query}")
+
+        all_messages = []
+        page_token = None
+
+        while True:
+            results = service.users().messages().list(
+                userId='me',
+                q=query,
+                pageToken=page_token,
+                maxResults=100
+            ).execute()
+
+            all_messages.extend(results.get('messages', []))
+            page_token = results.get('nextPageToken')
+
+            if not page_token:
+                break
+
+        print(f"Step 1: Found {len(all_messages)} total messages after timestamp")
+
+        # Step 2: Filter out messages we already have in the database
+        existing_message_ids = set()
+        for doc in emails_ref.stream():
+            existing_message_ids.add(doc.id)
+
+        messages_not_in_db = [msg for msg in all_messages if msg['id'] not in existing_message_ids]
+        print(f"Step 2: After filtering existing messages: {len(messages_not_in_db)} messages not in database")
+
+        # Step 3: Map thread IDs and filter emails that belong to existing conversations
+        # Gmail API messages.list() already includes threadId, no extra API calls needed!
+        new_messages = []
+
+        for message in messages_not_in_db:
+            message_thread_id = message.get('threadId')
+
+            # Check if this email's thread matches any existing thread in our database
+            if message_thread_id and message_thread_id in existing_thread_ids:
+                new_messages.append(message)
+                print(f"Found matching thread: {message['id']} in thread {message_thread_id}")
+
+        # If no existing threads, we need to check for app-sent emails to establish new threads
+        if not existing_thread_ids and len(messages_not_in_db) > 0:
+            print("No existing threads found, checking for app-sent emails to establish new threads")
+
+            # Check first few messages for custom header to establish threads
+            for message in messages_not_in_db[:10]:  # Check first 10 messages
+                try:
+                    msg_detail = service.users().messages().get(
+                        userId='me',
+                        id=message['id'],
+                        format='full'
+                    ).execute()
+
+                    # Check if this message has our custom header
+                    payload = msg_detail.get('payload', {})
+                    headers = payload.get('headers', [])
+                    has_custom_header = any(
+                        h.get('name') == 'X-MyApp-ID' and h.get('value') == 'ContactSpidey'
+                        for h in headers
+                    )
+
+                    if has_custom_header:
+                        new_messages.append(message)
+                        print(f"Found app-sent email to establish new thread: {message['id']}")
+
+                except Exception as e:
+                    print(f"Error checking custom header for {message['id']}: {e}")
+                    continue
+
+        print(f"Step 3: Final filtered messages to sync: {len(new_messages)}")
+
+        # Process and store emails
+        emails_synced = 0
+
+        for message in new_messages:
+            try:
+                # Get full message details
+                msg_detail = service.users().messages().get(
+                    userId='me',
+                    id=message['id'],
+                    format='full'
+                ).execute()
+
+                # Parse email data
+                payload = msg_detail.get('payload', {})
+                headers = payload.get('headers', [])
+
+                # Extract header values
+                subject = ''
+                from_addr = ''
+                to_addr = []
+                cc_addr = []
+                bcc_addr = []
+                date = ''
+
+                for header in headers:
+                    name = header.get('name', '').lower()
+                    value = header.get('value', '')
+
+                    if name == 'subject':
+                        subject = value
+                    elif name == 'from':
+                        from_addr = value
+                    elif name == 'to':
+                        to_addr = [email.strip() for email in value.split(',')]
+                    elif name == 'cc':
+                        cc_addr = [email.strip() for email in value.split(',')]
+                    elif name == 'bcc':
+                        bcc_addr = [email.strip() for email in value.split(',')]
+                    elif name == 'date':
+                        date = value
+
+                # Get email body
+                body = ''
+                if payload.get('body', {}).get('data'):
+                    body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8')
+                elif payload.get('parts'):
+                    for part in payload['parts']:
+                        if part.get('mimeType') == 'text/plain' and part.get('body', {}).get('data'):
+                            body = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8')
+                            break
+                        elif part.get('mimeType') == 'text/html' and part.get('body', {}).get('data'):
+                            body = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8')
+                            break
+
+                # Create email data for Firestore
+                email_data = {
+                    'messageId': message['id'],
+                    'threadId': msg_detail.get('threadId', ''),
+                    'from': from_addr,
+                    'to': to_addr,
+                    'subject': subject,
+                    'body': body,
+                    'snippet': msg_detail.get('snippet', ''),
+                    'headers': {
+                        'X-MyApp-ID': 'ContactSpidey',
+                        'Date': date,
+                        'From': from_addr,
+                        'To': ', '.join(to_addr),
+                        'Subject': subject
+                    },
+                    'labels': msg_detail.get('labelIds', []),
+                    'isRead': 'UNREAD' not in msg_detail.get('labelIds', []),
+                    'isSent': 'SENT' in msg_detail.get('labelIds', []),
+                    'timestamp': firestore.SERVER_TIMESTAMP,
+                    'threadMessagesCount': 1
+                }
+
+                # Add CC and BCC if present
+                if cc_addr:
+                    email_data['cc'] = cc_addr
+                    email_data['headers']['CC'] = ', '.join(cc_addr)
+                if bcc_addr:
+                    email_data['bcc'] = bcc_addr
+                    email_data['headers']['BCC'] = ', '.join(bcc_addr)
+
+                # Store email in Firestore
+                email_ref = user_ref.collection('emails').document(message['id'])
+                email_ref.set(email_data)
+
+                emails_synced += 1
+
+            except Exception as e:
+                print(f"Error processing message {message['id']}: {e}")
+                continue
+
+        # Only update lastSyncTimestamp if emails were actually synced
+        updated_timestamp = ""
+        if emails_synced > 0:
+            # Update lastSyncTimestamp only if emails were synced
+            user_ref.update({
+                'lastSyncTimestamp': firestore.SERVER_TIMESTAMP
+            })
+
+            # Get the updated timestamp for response
+            updated_user_doc = user_ref.get()
+            if updated_user_doc.exists:
+                updated_data = updated_user_doc.to_dict()
+                if updated_data.get('lastSyncTimestamp'):
+                    timestamp_obj = updated_data['lastSyncTimestamp']
+                    if hasattr(timestamp_obj, 'isoformat'):
+                        updated_timestamp = timestamp_obj.isoformat()
+                    else:
+                        updated_timestamp = str(timestamp_obj)
+        else:
+            # No emails synced, keep the existing timestamp for response
+            updated_timestamp = last_sync_timestamp.isoformat() if hasattr(last_sync_timestamp, 'isoformat') else str(last_sync_timestamp)
+
+        return RefreshEmailsResponse(
+            message=f"Successfully synced {emails_synced} emails from Gmail",
+            emails_synced=emails_synced,
+            last_sync_timestamp=updated_timestamp
+        )
+
+    except Exception as e:
+        print(f"Error refreshing emails for user {user_email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to refresh emails: {str(e)}")
+
+def process_gmail_webhook_notification(user_email: str, history_id: str):
+    """Process Gmail webhook notification and sync relevant emails"""
+    try:
+        # Get user credentials
+        user_creds = get_user_credentials(user_email)
+
+        if not user_creds.get('oauth'):
+            print(f"No credentials found for user {user_email}")
+            return 0
+
+        # Create OAuth2 credentials
+        creds = Credentials(
+            token=user_creds['oauth'],
+            refresh_token=user_creds.get('refresh_token'),
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=google_config.get('client_id'),
+            client_secret=google_config.get('client_secret')
+        )
+
+        # Refresh token if expired
+        if creds.expired and creds.refresh_token:
+            creds.refresh(google.auth.transport.requests.Request())
+            # Store updated credentials
+            store_updated_credentials(user_email, creds.token, creds.refresh_token)
+
+        # Build Gmail service
+        service = build('gmail', 'v1', credentials=creds)
+
+        # Get existing thread IDs and message IDs from database
+        existing_thread_ids = set()
+        existing_message_ids = set()
+        user_ref = db.collection('users').document(user_email)
+        emails_ref = user_ref.collection('emails')
+
+        for doc in emails_ref.stream():
+            email_data = doc.to_dict()
+            existing_message_ids.add(doc.id)
+            if email_data.get('threadId'):
+                existing_thread_ids.add(email_data['threadId'])
+
+        print(f"User {user_email} has {len(existing_thread_ids)} threads and {len(existing_message_ids)} messages in DB")
+
+        # Use Gmail history API to get changes since the historyId
+        history_response = service.users().history().list(
+            userId='me',
+            startHistoryId=history_id,
+            historyTypes=['messageAdded']
+        ).execute()
+
+        new_emails_count = 0
+        history_items = history_response.get('history', [])
+
+        for history_item in history_items:
+            messages_added = history_item.get('messagesAdded', [])
+
+            for message_added in messages_added:
+                message = message_added.get('message', {})
+                message_id = message.get('id')
+                thread_id = message.get('threadId')
+
+                # Check if message already exists
+                if message_id in existing_message_ids:
+                    print(f"Message {message_id} already exists, skipping")
+                    continue
+
+                # Check if thread exists in our database
+                if thread_id and thread_id in existing_thread_ids:
+                    print(f"Processing new message {message_id} in existing thread {thread_id}")
+
+                    # Fetch full message details
+                    try:
+                        msg_detail = service.users().messages().get(
+                            userId='me',
+                            id=message_id,
+                            format='full'
+                        ).execute()
+
+                        # Parse email data (same logic as refresh function)
+                        payload = msg_detail.get('payload', {})
+                        headers = payload.get('headers', [])
+
+                        subject = ''
+                        from_addr = ''
+                        to_addr = []
+                        cc_addr = []
+                        bcc_addr = []
+                        date = ''
+
+                        for header in headers:
+                            name = header.get('name', '').lower()
+                            value = header.get('value', '')
+
+                            if name == 'subject':
+                                subject = value
+                            elif name == 'from':
+                                from_addr = value
+                            elif name == 'to':
+                                to_addr = [email.strip() for email in value.split(',')]
+                            elif name == 'cc':
+                                cc_addr = [email.strip() for email in value.split(',')]
+                            elif name == 'bcc':
+                                bcc_addr = [email.strip() for email in value.split(',')]
+                            elif name == 'date':
+                                date = value
+
+                        # Get email body
+                        body = ''
+                        if payload.get('body', {}).get('data'):
+                            body = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8')
+                        elif payload.get('parts'):
+                            for part in payload['parts']:
+                                if part.get('mimeType') == 'text/plain' and part.get('body', {}).get('data'):
+                                    body = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8')
+                                    break
+                                elif part.get('mimeType') == 'text/html' and part.get('body', {}).get('data'):
+                                    body = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8')
+                                    break
+
+                        # Create email data for Firestore
+                        email_data = {
+                            'messageId': message_id,
+                            'threadId': thread_id,
+                            'from': from_addr,
+                            'to': to_addr,
+                            'subject': subject,
+                            'body': body,
+                            'snippet': msg_detail.get('snippet', ''),
+                            'headers': {
+                                'Date': date,
+                                'From': from_addr,
+                                'To': ', '.join(to_addr),
+                                'Subject': subject
+                            },
+                            'labels': msg_detail.get('labelIds', []),
+                            'isRead': 'UNREAD' not in msg_detail.get('labelIds', []),
+                            'isSent': 'SENT' in msg_detail.get('labelIds', []),
+                            'timestamp': firestore.SERVER_TIMESTAMP,
+                            'threadMessagesCount': 1
+                        }
+
+                        # Add CC and BCC if present
+                        if cc_addr:
+                            email_data['cc'] = cc_addr
+                            email_data['headers']['CC'] = ', '.join(cc_addr)
+                        if bcc_addr:
+                            email_data['bcc'] = bcc_addr
+                            email_data['headers']['BCC'] = ', '.join(bcc_addr)
+
+                        # Store email in Firestore
+                        email_ref = emails_ref.document(message_id)
+                        email_ref.set(email_data)
+
+                        new_emails_count += 1
+                        print(f"Stored new email {message_id} for user {user_email}")
+
+                    except Exception as e:
+                        print(f"Error processing message {message_id}: {e}")
+                        continue
+                else:
+                    print(f"Message {message_id} thread {thread_id} not in existing threads, skipping")
+
+        # Update lastSyncTimestamp since we processed new emails
+        if new_emails_count > 0:
+            user_ref.update({
+                'lastSyncTimestamp': firestore.SERVER_TIMESTAMP
+            })
+            print(f"Updated lastSyncTimestamp for user {user_email}")
+
+        return new_emails_count
+
+    except Exception as e:
+        print(f"Error processing Gmail webhook for user {user_email}: {e}")
+        return 0
+
 @app.post("/send-email")
 async def send_email(request: SendEmailRequest):
     """Send an email using the user's stored OAuth credentials"""
@@ -320,6 +897,87 @@ async def send_email(request: SendEmailRequest):
     except Exception as e:
         print(f'Unexpected error: {e}')
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/fetch-emails")
+async def fetch_emails(request: FetchEmailsRequest):
+    """Fetch paginated emails for a user from Firestore"""
+    try:
+        # Validate page number
+        if request.page < 1:
+            raise HTTPException(status_code=400, detail="Page number must be 1 or greater")
+
+        # Fetch emails
+        result = fetch_user_emails(request.user_email, request.page, 30)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in fetch-emails: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/refresh-emails")
+async def refresh_emails(request: RefreshEmailsRequest):
+    """Refresh emails for a user from Gmail API after lastSyncTimestamp"""
+    try:
+        # Refresh emails from Gmail
+        result = refresh_user_emails_from_gmail(request.user_email)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in refresh-emails: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/gmail-webhook")
+async def gmail_webhook(request: GmailWebhookRequest):
+    """Handle Gmail Pub/Sub notifications for real-time email sync"""
+    try:
+        # Extract the base64 encoded data
+        message_data = request.message
+        encoded_data = message_data.get('data', '')
+
+        if not encoded_data:
+            print("No data field in webhook message")
+            return {"status": "no_data"}
+
+        # Decode the base64 data
+        try:
+            decoded_bytes = base64.b64decode(encoded_data)
+            decoded_json = decoded_bytes.decode('utf-8')
+            notification_data = json.loads(decoded_json)
+        except Exception as e:
+            print(f"Error decoding webhook data: {e}")
+            return {"status": "decode_error", "error": str(e)}
+
+        # Extract emailAddress and historyId
+        user_email = notification_data.get('emailAddress')
+        history_id = notification_data.get('historyId')
+
+        if not user_email or not history_id:
+            print(f"Missing emailAddress or historyId in notification: {notification_data}")
+            return {"status": "missing_fields"}
+
+        print(f"Received Gmail webhook for user {user_email} with historyId {history_id}")
+
+        # Process the notification and sync relevant emails
+        emails_synced = process_gmail_webhook_notification(user_email, history_id)
+
+        print(f"Webhook processed: {emails_synced} emails synced for user {user_email}")
+
+        return {
+            "status": "processed",
+            "user_email": user_email,
+            "history_id": history_id,
+            "emails_synced": emails_synced
+        }
+
+    except Exception as e:
+        print(f"Error processing Gmail webhook: {e}")
+        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)}")
 
 @app.get("/health")
 async def health_check():
