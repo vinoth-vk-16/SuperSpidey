@@ -3,11 +3,20 @@ from pydantic import BaseModel
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
+import json
 from typing import Optional
+from dotenv import load_dotenv
 
-# Initialize Firebase Admin SDK
-cred_path = os.path.join(os.path.dirname(__file__), 'access-key.json')
-cred = credentials.Certificate(cred_path)
+# Load environment variables from .env file
+load_dotenv()
+
+# Load Firebase service account key from environment
+service_key_env = os.getenv('service_key')
+if not service_key_env:
+    raise Exception("service_key environment variable not found. Make sure it's set in the .env file")
+
+firebase_credentials = json.loads(service_key_env)
+cred = credentials.Certificate(firebase_credentials)
 firebase_admin.initialize_app(cred)
 
 # Initialize Firestore client
