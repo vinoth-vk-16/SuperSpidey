@@ -9,29 +9,15 @@ A FastAPI service for storing Google OAuth credentials in Firestore.
 pip install -r requirements.txt
 ```
 
-2. Set environment variables:
-   - `service_key`: Your Firebase service account JSON string
+2. Make sure `access-key.json` is in the same directory as `main.py`
 
-## Deployment
+3. The OAuth configuration in `server/routes.ts` is set to always request refresh tokens:
+   - `accessType: 'offline'` - Requests offline access
+   - `prompt: 'consent'` - Forces consent screen to ensure refresh token
 
-### Render Deployment
-
-1. **Create a new Web Service** on Render
-
-2. **Connect your repository** and set the following:
-
-   - **Runtime**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
-
-3. **Add Environment Variables**:
-   - `service_key`: Your Firebase service account JSON string
-   - `PORT`: (Render sets this automatically)
-
-### Local Development
+## Running the Service
 
 ```bash
-pip install -r requirements.txt
 python main.py
 ```
 

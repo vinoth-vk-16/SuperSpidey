@@ -984,9 +984,6 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
 
-# Export the app for gunicorn (production deployment)
-# This allows gunicorn to import the app directly
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -217,36 +217,11 @@ Collection: users
           - threadMessagesCount: number
 ```
 
-## Deployment
-
-### Render Deployment
-
-1. **Create a new Web Service** on Render
-
-2. **Connect your repository** and set the following:
-
-   - **Runtime**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT`
-
-3. **Add Environment Variables**:
-   - `VITE_GOOGLE_CRED`: Your Google OAuth credentials JSON string
-   - `service_key`: Your Firebase service account JSON string
-   - `PORT`: (Render sets this automatically)
-
-### Local Development
-
-```bash
-pip install -r requirements.txt
-python main.py
-```
-
 ## Dependencies
 
 - OAuth Storage Service (port 8000) - for retrieving/storing user credentials
 - Google Gmail API - for sending emails
 - Firestore - for credential and email data storage
-- Gunicorn - for production deployment
 
 ## Email Format
 

@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: oauth-storage-api
-    runtime: python3
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
