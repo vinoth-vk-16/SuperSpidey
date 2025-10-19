@@ -9,4 +9,5 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["python", "main.py"]
+# Use gunicorn with uvicorn workers for production, python for development
+CMD gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
