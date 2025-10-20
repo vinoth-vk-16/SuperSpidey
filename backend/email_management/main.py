@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import google.auth.transport.requests
@@ -46,6 +47,15 @@ print("Google OAuth Config loaded:", {
 })
 
 app = FastAPI(title="Email Management Service", version="1.0.0")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow specific origins and localhost
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 class SendEmailRequest(BaseModel):
     user_email: str

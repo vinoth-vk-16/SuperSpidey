@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 import time
@@ -38,6 +39,15 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 app = FastAPI(title="Gmail Watch Cron Job", version="1.0.0")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5000", "https://superspidey-contact-remedy.onrender.com", "*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 def renew_gmail_watch(user_email: str):
     """Renew Gmail watch for a user directly without HTTP calls"""
