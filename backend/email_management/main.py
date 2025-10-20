@@ -64,6 +64,7 @@ class SendEmailRequest(BaseModel):
     body: str
     bcc: Optional[List[str]] = None
     cc: Optional[List[str]] = None
+    thread_id: Optional[str] = None  # For replying to existing threads
 
 class FetchEmailsRequest(BaseModel):
     user_email: str
@@ -170,7 +171,7 @@ def refresh_access_token(refresh_token: str):
     # For now, we'll let the Google API client handle refresh automatically
     pass
 
-def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[List[str]] = None, bcc: Optional[List[str]] = None):
+def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[List[str]] = None, bcc: Optional[List[str]] = None, thread_id: Optional[str] = None):
     """Create a message for an email"""
     # Convert plain text to HTML with proper formatting (same as routes.ts)
     def format_email_body(text: str):
@@ -852,15 +853,24 @@ async def send_email(request: SendEmailRequest):
             subject=request.subject,
             body=request.body,
             cc=request.cc,
-            bcc=request.bcc
+            bcc=request.bcc,
+            thread_id=request.thread_id
         )
 
         # Send the email
         try:
-            result = service.users().messages().send(
-                userId='me',
-                body=message
-            ).execute()
+            # Prepare send request body
+            send_request = {
+                'userId': 'me',
+                'body': message
+            }
+
+            # Add threadId if this is a reply
+            if request.thread_id:
+                send_request['body']['threadId'] = request.thread_id
+                print(f'Sending reply to thread: {request.thread_id}')
+
+            result = service.users().messages().send(**send_request).execute()
 
             print(f'Email sent successfully with ID: {result["id"]}')
 
@@ -882,7 +892,7 @@ async def send_email(request: SendEmailRequest):
             # Store email data in Firestore
             email_data = {
                 'messageId': result['id'],
-                'threadId': result.get('threadId', ''),
+                'threadId': result.get('threadId', request.thread_id or ''),
                 'from': request.user_email,
                 'to': [request.to_email],
                 'subject': request.subject,

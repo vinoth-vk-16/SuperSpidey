@@ -33,10 +33,14 @@ Send an email using the user's stored OAuth credentials.
   "to_email": "recipient@example.com",
   "subject": "Email Subject",
   "body": "Email body content",
-  "cc": ["cc@example.com"],     // Optional
-  "bcc": ["bcc@example.com"]    // Optional
+  "cc": ["cc@example.com"],           // Optional
+  "bcc": ["bcc@example.com"],         // Optional
+  "thread_id": "thread123"            // Optional - for replying to existing threads
 }
 ```
+
+**Thread Support:**
+When `thread_id` is provided, the email will be sent as a reply to the existing thread. The email will appear in the same conversation in Gmail and be properly threaded in your email client.
 
 **Response:**
 ```json

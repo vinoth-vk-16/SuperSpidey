@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Helper function to clean raw response text and remove subject lines
 function cleanResponseText(text: string): string {
@@ -15,9 +15,14 @@ function cleanResponseText(text: string): string {
 
 export async function generateEmailDraft(prompt: string, apiKey: string): Promise<{ subject: string; body: string }> {
   try {
-    console.log("Generating email draft...");
+    console.log("Generating email draft with API key:", apiKey ? "Present" : "Missing");
     
-    const ai = new GoogleGenAI({ apiKey });
+    if (!apiKey || apiKey.trim() === '') {
+      throw new Error("API key is required");
+    }
+    
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const systemPrompt = `Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query".
 
@@ -29,19 +34,15 @@ CRITICAL: Respond with a JSON object containing both subject and body fields. St
 
 The body should be a complete email with proper closing like "Thanks" or "Best regards" followed by {user name} at the end. The email should be professional and appropriate for business communication with complete structure including greeting, body, and proper closing with signature. NEVER include subject lines or headers in the body field.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      config: {
-        systemInstruction: systemPrompt,
-      },
-      contents: `User query: ${prompt}`,
-    });
+    const result = await model.generateContent(`${systemPrompt}\n\nUser query: ${prompt}`);
+    const response = result.response;
 
     console.log("Generated email draft successfully");
     
     try {
       // Parse the JSON response and extract only the body
-      const responseText = response.text || "Failed to generate email draft";
+      const responseText = response.text() || "Failed to generate email draft";
+      console.log("Response text:", responseText);
       
       // Clean up response text - remove code fences and extra whitespace
       let cleanedText = responseText.trim();
@@ -83,7 +84,7 @@ The body should be a complete email with proper closing like "Thanks" or "Best r
       console.log("Failed to parse JSON response, using cleaned raw text");
       return {
         subject: "",
-        body: cleanResponseText(response.text || "Failed to generate email draft")
+        body: cleanResponseText(response.text() || "Failed to generate email draft")
       };
     }
   } catch (error) {
@@ -94,9 +95,14 @@ The body should be a complete email with proper closing like "Thanks" or "Best r
 
 export async function improveEmail(text: string, action: string, apiKey: string, customPrompt?: string): Promise<string> {
   try {
-    console.log("Improving email...");
+    console.log("Improving email with API key:", apiKey ? "Present" : "Missing");
     
-    const ai = new GoogleGenAI({ apiKey });
+    if (!apiKey || apiKey.trim() === '') {
+      throw new Error("API key is required");
+    }
+    
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     let actionPrompt = "";
     
@@ -129,13 +135,11 @@ export async function improveEmail(text: string, action: string, apiKey: string,
       }
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: `${actionPrompt}\n\n${text}`,
-    });
+    const result = await model.generateContent(`${actionPrompt}\n\n${text}`);
+    const response = result.response;
 
     console.log("Email improved successfully");
-    return response.text || "Failed to improve email";
+    return response.text() || "Failed to improve email";
   } catch (error) {
     console.error("Gemini API error:", error);
     throw new Error("Failed to improve email with AI");

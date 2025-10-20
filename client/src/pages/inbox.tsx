@@ -1,10 +1,11 @@
 import { useLocation } from 'wouter';
-import { Search, Archive, Trash2, Clock, Check, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Archive, Trash2, Clock, Check, RotateCcw, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import Sidebar from '@/components/sidebar';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   messageId: string;
@@ -35,6 +36,7 @@ export default function InboxPage() {
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const { toast } = useToast();
 
   const { data: emailData, isLoading, error, refetch } = useQuery({
     queryKey: ['emails', currentPage],
@@ -55,6 +57,47 @@ export default function InboxPage() {
       return response.json();
     },
     refetchInterval: 30000,
+  });
+
+  // Refresh mutation to sync new emails from Gmail
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('https://superspidey-email-management.onrender.com/refresh-emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_email: 'imvinothvk521@gmail.com',
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to refresh emails');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.emails_synced && data.emails_synced > 0) {
+        toast({
+          title: "Emails refreshed!",
+          description: `Successfully synced ${data.emails_synced} new email${data.emails_synced > 1 ? 's' : ''}`,
+        });
+        // Refetch emails to show new ones
+        refetch();
+      } else {
+        toast({
+          title: "No new emails",
+          description: "Your inbox is up to date",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Refresh failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const threads: EmailThread[] = emailData?.threads || [];
@@ -102,11 +145,33 @@ export default function InboxPage() {
         <div className="w-64 bg-background"></div>
         {/* Main Content Box */}
         <div className="flex-1 p-2">
-          <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-10 h-10 border-3 border-muted border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-              <div className="text-muted-foreground font-medium">Loading your inbox...</div>
+          <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
+            {/* Header Shimmer */}
+            <div className="px-6 py-3 border-b border-border">
+              <div className="flex items-center justify-between">
+                <div className="h-6 w-24 bg-muted rounded animate-pulse"></div>
+                <div className="h-8 w-64 bg-muted rounded-lg animate-pulse"></div>
+          </div>
             </div>
+            {/* Email List Shimmer */}
+            <div className="flex-1 overflow-auto custom-scrollbar">
+              <div className="max-w-5xl mx-auto">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="border-b border-border px-6 py-4">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-5 h-5 bg-muted rounded animate-pulse"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="h-4 w-48 bg-muted rounded animate-pulse"></div>
+                          <div className="h-3 w-16 bg-muted rounded animate-pulse"></div>
+                        </div>
+                        <div className="h-3 w-full bg-muted rounded animate-pulse"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+          </div>
+        </div>
           </div>
         </div>
       </div>
@@ -151,18 +216,32 @@ export default function InboxPage() {
           <div className="px-6 py-3 border-b border-border">
             <div className="flex items-center justify-between">
               <h1 className="text-lg font-semibold text-foreground">Inbox</h1>
-              <div className="relative w-64">
-                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-8 pl-8 pr-16 bg-muted border-0 rounded-lg text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-0.5">
-                  <kbd className="px-1.5 py-0.5 bg-background/50 rounded text-[10px] text-muted-foreground font-mono">⌘</kbd>
-                  <kbd className="px-1.5 py-0.5 bg-background/50 rounded text-[10px] text-muted-foreground font-mono">K</kbd>
+              <div className="flex items-center space-x-3">
+                {/* Refresh Button */}
+                  <Button
+                    variant="ghost"
+                  size="sm"
+                  onClick={() => refreshMutation.mutate()}
+                  disabled={refreshMutation.isPending}
+                  className="h-8 w-8 p-0 hover:bg-muted rounded-lg"
+                  title="Refresh emails"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                  </Button>
+                {/* Search Bar */}
+                <div className="relative w-64">
+                  <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-8 pl-8 pr-16 bg-muted border-0 rounded-lg text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-0.5">
+                    <kbd className="px-1.5 py-0.5 bg-background/50 rounded text-[10px] text-muted-foreground font-mono">⌘</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-background/50 rounded text-[10px] text-muted-foreground font-mono">K</kbd>
+                  </div>
                 </div>
               </div>
             </div>
@@ -249,10 +328,16 @@ function EmailThreadItem({ thread, isSelected, isExpanded, onToggleSelect, onTog
   const [, setLocation] = useLocation();
 
   const getSenderName = (from: string) => {
-    if (from.includes('<')) {
-      return from.split('<')[0].trim();
+    // Remove surrounding quotes first (e.g., "\"58 , Vinoth Kumar\" <email>" -> "58 , Vinoth Kumar <email>")
+    let cleanFrom = from.replace(/^"(.*)"(\s*<.+>)$/, '$1$2').trim();
+    
+    if (cleanFrom.includes('<')) {
+      const name = cleanFrom.split('<')[0].trim();
+      // Remove any leading numbers and commas (e.g., "58 , Vinoth Kumar" -> "Vinoth Kumar")
+      const cleanName = name.replace(/^\d+\s*,?\s*/, '').trim();
+      return cleanName || cleanFrom.split('@')[0];
     }
-    return from.split('@')[0];
+    return cleanFrom.split('@')[0];
   };
 
   const latestMessage = thread.messages[0];
