@@ -6,4 +6,5 @@ google-api-python-client
 firebase-admin
 pydantic
 python-dotenv
+google-generativeai
 gunicorn

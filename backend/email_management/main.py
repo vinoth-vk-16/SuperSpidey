@@ -15,6 +15,7 @@ import json
 import re
 import time
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,6 +46,116 @@ print("Google OAuth Config loaded:", {
     "clientSecret": '***' if google_config.get('client_secret') else 'NOT_SET',
     "redirectURI": google_config.get('redirect_uris', ['NOT_SET'])[1] if len(google_config.get('redirect_uris', [])) > 1 else 'NOT_SET'
 })
+
+def clean_response_text(text: str) -> str:
+    """Clean raw response text and remove subject lines"""
+    cleaned = text.strip()
+
+    # Remove any subject lines that might be present
+    cleaned = re.sub(r'^Subject:\s*.*\n?', '', cleaned, flags=re.MULTILINE | re.IGNORECASE)
+    cleaned = re.sub(r'^Re:\s*.*\n?', '', cleaned, flags=re.MULTILINE | re.IGNORECASE)
+    cleaned = re.sub(r'^Fw:\s*.*\n?', '', cleaned, flags=re.MULTILINE | re.IGNORECASE)
+
+    # Remove any remaining leading/trailing whitespace
+    return cleaned.strip()
+
+async def generate_email_draft(prompt: str, api_key: str) -> Dict[str, str]:
+    """Generate email draft using Gemini AI"""
+    try:
+        if not api_key or api_key.strip() == '':
+            raise HTTPException(status_code=400, detail="API key is required")
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query".
+
+CRITICAL: Respond with a JSON object containing both subject and body fields. Structure your response EXACTLY like this:
+{
+  "subject": "Brief descriptive subject line",
+  "body": "Complete email body starting with greeting and ending with proper signature"
+}
+
+The body should be a complete email with proper closing like "Thanks" or "Best regards" followed by {user name} at the end. The email should be professional and appropriate for business communication with complete structure including greeting, body, and proper closing with signature. NEVER include subject lines or headers in the body field."""
+
+        result = model.generate_content(f"{system_prompt}\n\nUser query: {prompt}")
+        response = result.text
+
+        # Clean up response text - remove code fences and extra whitespace
+        cleaned_text = response.strip()
+
+        # Remove markdown code fences if present
+        if cleaned_text.startswith('```json'):
+            cleaned_text = cleaned_text.replace('```json\n', '').replace('\n```', '')
+        elif cleaned_text.startswith('```'):
+            cleaned_text = cleaned_text.replace('```\n', '').replace('\n```', '')
+
+        # Try to extract JSON object if wrapped in other text
+        json_match = re.search(r'\{[\s\S]*\}', cleaned_text)
+        if json_match:
+            cleaned_text = json_match.group(0)
+
+        try:
+            parsed_response = json.loads(cleaned_text)
+
+            if parsed_response.get('body') and parsed_response.get('subject'):
+                return {
+                    'subject': parsed_response['subject'],
+                    'body': parsed_response['body']
+                }
+            elif parsed_response.get('body'):
+                return {
+                    'subject': '',
+                    'body': parsed_response['body']
+                }
+            else:
+                # Fallback if no body field
+                return {
+                    'subject': '',
+                    'body': clean_response_text(response)
+                }
+        except json.JSONDecodeError:
+            # Fallback to raw response if JSON parsing fails
+            return {
+                'subject': '',
+                'body': clean_response_text(response)
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate email draft: {str(e)}")
+
+async def improve_email(text: str, action: str, api_key: str, custom_prompt: Optional[str] = None) -> str:
+    """Improve email using Gemini AI"""
+    try:
+        if not api_key or api_key.strip() == '':
+            raise HTTPException(status_code=400, detail="API key is required")
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        # If custom prompt is provided, use it directly
+        if custom_prompt and action == "custom":
+            action_prompt = custom_prompt
+        else:
+            # Use predefined prompts
+            action_prompts = {
+                "improve": "Improve the writing style, clarity, and professionalism of this email while maintaining its meaning. Keep it concise and to the point:",
+                "shorten": "Make this email more concise while preserving all important information:",
+                "lengthen": "Expand this email with more detail and context while maintaining professionalism:",
+                "fix-grammar": "Fix any spelling, grammar, and punctuation errors in this email:",
+                "simplify": "Simplify the language and structure of this email to make it easier to understand:",
+                "rewrite": "Rewrite this email in a more natural, conversational tone while keeping it professional:",
+                "write": "Write a complete professional email based on this prompt:"
+            }
+            action_prompt = action_prompts.get(action, "Improve this email:")
+
+        result = model.generate_content(f"{action_prompt}\n\n{text}")
+        response = result.text
+
+        return response or "Failed to improve email"
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to improve email: {str(e)}")
 
 app = FastAPI(title="Email Management Service", version="1.0.0")
 
@@ -112,6 +223,23 @@ class RefreshEmailsResponse(BaseModel):
 class GmailWebhookRequest(BaseModel):
     message: Dict[str, Any]
     subscription: str
+
+class GenerateEmailRequest(BaseModel):
+    prompt: str
+    api_key: str
+
+class GenerateEmailResponse(BaseModel):
+    subject: str
+    body: str
+
+class ImproveEmailRequest(BaseModel):
+    text: str
+    action: str  # write, shorten, simplify, improve, lengthen, fix-grammar, rewrite, custom
+    api_key: str
+    custom_prompt: Optional[str] = None
+
+class ImproveEmailResponse(BaseModel):
+    improved_text: str
 
 class StartWatchRequest(BaseModel):
     user_email: str
@@ -1018,6 +1146,33 @@ async def gmail_webhook(request: GmailWebhookRequest):
     except Exception as e:
         print(f"Error processing Gmail webhook: {e}")
         raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)}")
+
+@app.post("/generate-email")
+async def generate_email(request: GenerateEmailRequest):
+    """Generate email draft using Gemini AI"""
+    try:
+        result = await generate_email_draft(request.prompt, request.api_key)
+        return GenerateEmailResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/improve-email")
+async def improve_email_endpoint(request: ImproveEmailRequest):
+    """Improve email using Gemini AI with different actions"""
+    try:
+        improved_text = await improve_email(
+            request.text,
+            request.action,
+            request.api_key,
+            request.custom_prompt
+        )
+        return ImproveEmailResponse(improved_text=improved_text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/start-watch")
 async def start_gmail_watch(request: StartWatchRequest):

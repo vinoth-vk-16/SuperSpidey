@@ -226,6 +226,60 @@ Start Gmail watch for a user to enable real-time email notifications.
 - Stores watch state in database (gmail-watch.enabled, expiry, history_id)
 - Returns existing watch info if already active
 
+### POST /generate-email
+Generate email draft using Gemini AI.
+
+**Request Body:**
+```json
+{
+  "prompt": "Write a professional email to request a meeting with the CEO",
+  "api_key": "your-gemini-api-key"
+}
+```
+
+**Response:**
+```json
+{
+  "subject": "Request for Meeting with CEO",
+  "body": "Dear [CEO Name],\n\nI hope this email finds you well..."
+}
+```
+
+**Features:**
+- Generates complete professional emails with subject and body
+- Uses Gemini AI for intelligent content generation
+- Handles various email types and scenarios
+
+### POST /improve-email
+Improve or modify email content using Gemini AI with different actions.
+
+**Request Body:**
+```json
+{
+  "text": "Your email content here...",
+  "action": "improve",  // Options: write, shorten, simplify, improve, lengthen, fix-grammar, rewrite, custom
+  "api_key": "your-gemini-api-key",
+  "custom_prompt": "optional custom prompt for 'custom' action"
+}
+```
+
+**Response:**
+```json
+{
+  "improved_text": "Improved email content..."
+}
+```
+
+**Available Actions:**
+- `write`: Generate a new email from scratch
+- `shorten`: Make email more concise
+- `simplify`: Simplify language and structure
+- `improve`: Enhance writing style and professionalism
+- `lengthen`: Add more detail and context
+- `fix-grammar`: Correct spelling and grammar
+- `rewrite`: Rewrite in conversational tone
+- `custom`: Use custom prompt
+
 ## Features
 
 - **Token Management**: Automatically refreshes expired access tokens using refresh tokens
