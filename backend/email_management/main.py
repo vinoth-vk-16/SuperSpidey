@@ -66,7 +66,33 @@ async def generate_email_draft(prompt: str, api_key: str) -> Dict[str, str]:
             raise HTTPException(status_code=400, detail="API key is required")
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Try multiple models with fallback (newest to oldest)
+        model_names = [
+            'gemini-2.0-flash-exp',  # Latest experimental model
+            'gemini-exp-1206',        # December 2024 experimental
+            'gemini-1.5-pro',         # Stable Pro model
+            'gemini-pro'              # Fallback to older stable model
+        ]
+        
+        model = None
+        last_error = None
+        
+        for model_name in model_names:
+            try:
+                model = genai.GenerativeModel(model_name)
+                print(f"✅ Using Gemini model: {model_name}")
+                break
+            except Exception as e:
+                last_error = e
+                print(f"⚠️ Model {model_name} not available: {str(e)}")
+                continue
+        
+        if model is None:
+            raise HTTPException(
+                status_code=503, 
+                detail=f"No Gemini models available. Last error: {str(last_error)}"
+            )
 
         system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query".
 
@@ -131,7 +157,33 @@ async def improve_email(text: str, action: str, api_key: str, custom_prompt: Opt
             raise HTTPException(status_code=400, detail="API key is required")
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Try multiple models with fallback (newest to oldest)
+        model_names = [
+            'gemini-2.0-flash-exp',  # Latest experimental model
+            'gemini-exp-1206',        # December 2024 experimental
+            'gemini-1.5-pro',         # Stable Pro model
+            'gemini-pro'              # Fallback to older stable model
+        ]
+        
+        model = None
+        last_error = None
+        
+        for model_name in model_names:
+            try:
+                model = genai.GenerativeModel(model_name)
+                print(f"✅ Using Gemini model: {model_name}")
+                break
+            except Exception as e:
+                last_error = e
+                print(f"⚠️ Model {model_name} not available: {str(e)}")
+                continue
+        
+        if model is None:
+            raise HTTPException(
+                status_code=503, 
+                detail=f"No Gemini models available. Last error: {str(last_error)}"
+            )
 
         # If custom prompt is provided, use it directly
         if custom_prompt and action == "custom":

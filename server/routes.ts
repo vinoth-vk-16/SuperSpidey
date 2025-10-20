@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
-import { generateEmailDraft, improveEmail } from "./services/gemini";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import session from "express-session";
@@ -343,76 +342,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Removed: Direct Gmail API message fetching
   // Now using external email management service
-
-  // Generate email draft using AI
-  app.post("/api/generate-draft", requireAuth, async (req, res) => {
-    try {
-      const { prompt, apiKey } = z.object({
-        prompt: z.string().min(1),
-        apiKey: z.string().min(1)
-      }).parse(req.body);
-      
-      const { subject, body } = await generateEmailDraft(prompt, apiKey);
-      res.json({ subject, body });
-    } catch (error: any) {
-      console.error("Error generating draft:", error);
-      
-      // Check for API key related errors
-      if (error?.message?.includes("API key not valid") || 
-          error?.message?.includes("API_KEY_INVALID") ||
-          error?.message?.includes("not valid")) {
-        return res.status(400).json({ 
-          error: "Invalid API key. Please go to Settings and enter a valid Gemini API key." 
-        });
-      }
-      
-      // Check for quota/rate limit errors
-      if (error?.message?.includes("quota") || error?.message?.includes("rate limit")) {
-        return res.status(429).json({ 
-          error: "API quota exceeded. Please check your Gemini API usage." 
-        });
-      }
-      
-      // Generic error
-      res.status(500).json({ error: "Failed to generate email draft" });
-    }
-  });
-
-  // Improve email using AI
-  app.post("/api/improve-email", requireAuth, async (req, res) => {
-    try {
-      const { text, action, apiKey, customPrompt } = z.object({
-        text: z.string().min(1),
-        action: z.enum(["improve", "shorten", "lengthen", "fix-grammar", "simplify", "rewrite", "custom"]),
-        apiKey: z.string().min(1),
-        customPrompt: z.string().optional()
-      }).parse(req.body);
-      
-      const improvedText = await improveEmail(text, action, apiKey, customPrompt);
-      res.json({ improvedText });
-    } catch (error: any) {
-      console.error("Error improving email:", error);
-      
-      // Check for API key related errors
-      if (error?.message?.includes("API key not valid") || 
-          error?.message?.includes("API_KEY_INVALID") ||
-          error?.message?.includes("not valid")) {
-        return res.status(400).json({ 
-          error: "Invalid API key. Please go to Settings and enter a valid Gemini API key." 
-        });
-      }
-      
-      // Check for quota/rate limit errors
-      if (error?.message?.includes("quota") || error?.message?.includes("rate limit")) {
-        return res.status(429).json({ 
-          error: "API quota exceeded. Please check your Gemini API usage." 
-        });
-      }
-      
-      // Generic error
-      res.status(500).json({ error: "Failed to improve email" });
-    }
-  });
+  
+  // Removed: AI endpoints - frontend now calls external service directly
+  // - /api/generate-draft -> https://superspidey-email-management.onrender.com/generate-email
+  // - /api/improve-email -> https://superspidey-email-management.onrender.com/improve-email
 
   const httpServer = createServer(app);
   return httpServer;

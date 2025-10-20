@@ -116,7 +116,20 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
       if (!apiKey) {
         throw new Error('No API key found');
       }
-      const response = await apiRequest('POST', '/api/generate-draft', { prompt, apiKey });
+      // Call external email management service directly
+      const response = await fetch('https://superspidey-email-management.onrender.com/generate-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          api_key: apiKey
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to generate email draft');
+      }
       return response.json();
     },
     onSuccess: (data) => {
@@ -286,13 +299,24 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
         prompt = `${actionMap[action as keyof typeof actionMap]}\n\n${text}`;
       }
       
-      const response = await apiRequest('POST', '/api/improve-email', { 
-        text: text, 
-        action: action, 
-        apiKey,
-        customPrompt: action === 'custom' ? customPrompt : undefined
+      // Call external email management service directly
+      const response = await fetch('https://superspidey-email-management.onrender.com/improve-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          action: action,
+          api_key: apiKey,
+          custom_prompt: action === 'custom' ? customPrompt : undefined
+        }),
       });
-      return response.json();
+      if (!response.ok) {
+        throw new Error('Failed to improve email');
+      }
+      const data = await response.json();
+      return { improvedText: data.improved_text };
     },
     onSuccess: (data) => {
       typeText(data.improvedText); // Use typing animation for regenerated content too

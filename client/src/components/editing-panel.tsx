@@ -32,8 +32,23 @@ export default function EditingPanel({ emailText, onTextUpdate, onClose }: Editi
       if (!apiKey) {
         throw new Error('No API key found');
       }
-      const response = await apiRequest('POST', '/api/improve-email', { text, action, apiKey });
-      return response.json();
+      // Call external email management service directly
+      const response = await fetch('https://superspidey-email-management.onrender.com/improve-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text,
+          action,
+          api_key: apiKey
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to improve email');
+      }
+      const data = await response.json();
+      return { improvedText: data.improved_text };
     },
     onSuccess: (data) => {
       onTextUpdate(data.improvedText);

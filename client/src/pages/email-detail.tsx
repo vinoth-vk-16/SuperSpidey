@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter';
-import { Reply, Forward, Sparkles } from 'lucide-react';
+import { Reply, Forward, Sparkles, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useRef } from 'react';
@@ -11,6 +11,7 @@ import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
 
 interface Message {
   messageId: string;
+  threadId: string;
   from_?: string;
   from?: string;
   to_?: string[];
@@ -195,8 +196,16 @@ export default function EmailDetailPage() {
     return (
       <div className="h-screen flex bg-background overflow-hidden">
         <Sidebar />
-        {/* Empty Section */}
-        <div className="w-64 bg-background flex-shrink-0"></div>
+        {/* Empty Section with Back Button */}
+        <div className="w-64 bg-background flex-shrink-0 flex items-start justify-center pt-6">
+          <button
+            onClick={() => setLocation('/')}
+            className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
+            title="Back to inbox"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+            </div>
         {/* Main Content Box with 8px margin */}
         <div className="flex-1 p-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
@@ -214,8 +223,16 @@ export default function EmailDetailPage() {
     return (
       <div className="h-screen flex bg-background overflow-hidden">
         <Sidebar />
-        {/* Empty Section */}
-        <div className="w-64 bg-background flex-shrink-0"></div>
+        {/* Empty Section with Back Button */}
+        <div className="w-64 bg-background flex-shrink-0 flex items-start justify-center pt-6">
+          <button
+            onClick={() => setLocation('/')}
+            className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
+            title="Back to inbox"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+            </div>
         {/* Main Content Box with 8px margin */}
         <div className="flex-1 p-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
@@ -235,8 +252,16 @@ export default function EmailDetailPage() {
     <div className="h-screen flex bg-background overflow-hidden">
       <Sidebar />
       
-      {/* Empty Section */}
-      <div className="w-64 bg-background flex-shrink-0"></div>
+      {/* Empty Section with Back Button */}
+      <div className="w-64 bg-background flex-shrink-0 flex items-start justify-center pt-6">
+        <button
+          onClick={() => setLocation('/')}
+          className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
+          title="Back to inbox"
+        >
+          <ArrowLeft className="w-5 h-5 text-foreground" />
+        </button>
+      </div>
 
       {/* Main Content Box with 8px margin (same as inbox) */}
       <div className="flex-1 p-2">
@@ -249,7 +274,7 @@ export default function EmailDetailPage() {
             </h1>
 
             {/* Display all messages in chronological order (oldest first) */}
-            <div className="space-y-0">
+            <div className="space-y-4">
               {currentThread && currentThread.messages
                 .slice()
                 .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
@@ -337,11 +362,14 @@ export default function EmailDetailPage() {
                   const toField = msg.to_ || msg.to;
                   const isMe = isCurrentUserEmail(fromField);
                   const recipientDisplay = getRecipientName(toField);
+                  
+                  // Determine border color: very light grey for user's emails, purple for others
+                  const borderColor = isMe ? 'border-muted-foreground/30' : 'border-primary';
 
                   return (
                     <div
                       key={msg.messageId}
-                      className="border-l-4 border-primary rounded-l-lg bg-muted/40 mb-3 last:mb-0 overflow-hidden"
+                      className={`border-l-4 ${borderColor} rounded-l-lg bg-muted/40 overflow-hidden`}
                     >
                       {/* Message Header */}
                       <div className="p-5 pb-3">
@@ -353,11 +381,11 @@ export default function EmailDetailPage() {
                             <div className="text-xs text-muted-foreground">
                               to {recipientDisplay}
                             </div>
-                          </div>
+          </div>
                           <div className="text-xs text-muted-foreground flex-shrink-0">
                             {format(new Date(msg.timestamp), 'h:mm a').toUpperCase()}
-                          </div>
-                        </div>
+          </div>
+        </div>
 
                         {/* Message Body */}
                         <div className="text-foreground text-sm leading-relaxed whitespace-pre-wrap mb-3">
@@ -375,11 +403,11 @@ export default function EmailDetailPage() {
                             >
                               <Reply className="w-4 h-4 mr-2" />
                               Reply
-                            </Button>
-                          </div>
+                </Button>
+              </div>
                         )}
-                      </div>
-                    </div>
+            </div>
+          </div>
                   );
                 })}
             </div>
@@ -396,14 +424,14 @@ export default function EmailDetailPage() {
                       <span className="text-sm font-medium text-muted-foreground w-12">To</span>
                       <div className="flex-1 text-sm text-foreground">
                         {extractEmailOnly(currentMessage.from_ || currentMessage.from)}
-                      </div>
-                    </div>
+          </div>
+        </div>
 
                     {/* Reply Body */}
                     <div className="pt-4">
                       <Textarea
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
                         placeholder="Type your reply... (Tip: Press Cmd/Ctrl + U for AI assistance)"
                         className="w-full min-h-[200px] text-sm border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 resize-none bg-transparent leading-relaxed"
                         autoFocus
@@ -414,11 +442,35 @@ export default function EmailDetailPage() {
                     <div className="pt-4 mt-4 border-t border-border/50 flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <Button
-                          onClick={() => {
-                            // TODO: Send reply
-                            console.log('Sending reply:', replyText);
-                            setIsReplying(false);
-                            setReplyText('');
+                          onClick={async () => {
+                            if (!replyText.trim()) return;
+                            
+                            try {
+                              const response = await fetch('https://superspidey-email-management.onrender.com/send-email', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  user_email: 'imvinothvk521@gmail.com',
+                                  to_email: extractEmailOnly(currentMessage.from_ || currentMessage.from),
+                                  subject: `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`,
+                                  body: replyText,
+                                  thread_id: currentThread?.threadId || currentMessage.threadId, // Include thread ID for replies
+                                }),
+                              });
+                              
+                              if (response.ok) {
+                                console.log('Reply sent successfully');
+                                setIsReplying(false);
+                                setReplyText('');
+                                // Optionally refresh the thread
+                              } else {
+                                console.error('Failed to send reply');
+                              }
+                            } catch (error) {
+                              console.error('Error sending reply:', error);
+                            }
                           }}
                           disabled={!replyText.trim()}
                           className="btn-superhuman bg-primary hover:bg-primary/90 text-primary-foreground"
@@ -433,9 +485,9 @@ export default function EmailDetailPage() {
                         >
                           <Sparkles className="w-4 h-4 mr-2" />
                           AI
-                        </Button>
-                        <Button
-                          variant="ghost"
+            </Button>
+            <Button 
+              variant="ghost" 
                           size="sm"
                           onClick={() => {
                             setIsReplying(false);
@@ -444,7 +496,7 @@ export default function EmailDetailPage() {
                           className="text-muted-foreground hover:text-foreground"
                         >
                           Discard
-                        </Button>
+            </Button>
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Press <kbd className="px-1.5 py-0.5 bg-background/50 rounded font-mono">⌘</kbd>
