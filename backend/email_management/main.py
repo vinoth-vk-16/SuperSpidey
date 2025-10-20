@@ -1002,11 +1002,14 @@ async def start_gmail_watch(request: StartWatchRequest):
 
         user_data = user_doc.to_dict()
 
-        # Check if user already has an active watch
+        # Check if user already has an active watch that expires more than 24 hours from now
         now = int(time.time())
+        one_day_from_now = now + (24 * 60 * 60)  # 24 hours from now
         existing_watch = user_data.get('gmail-watch')
 
-        if existing_watch and existing_watch.get('enabled') and existing_watch.get('expiry', 0) > now:
+        if existing_watch and existing_watch.get('enabled') and existing_watch.get('expiry', 0) > one_day_from_now:
+            hours_left = (existing_watch.get('expiry', 0) - now) / 3600
+            print(f"Watch already active for {user_email} (expires in {hours_left:.1f} hours)")
             return {
                 "message": "Watch already active",
                 "data": {
@@ -1031,12 +1034,11 @@ async def start_gmail_watch(request: StartWatchRequest):
 
             # Extract response data
             history_id = response.get("historyId")
-            expiry_ms = response.get("expiration", 0)
 
-            # Convert to int if it's a string, then divide by 1000
-            if isinstance(expiry_ms, str):
-                expiry_ms = int(expiry_ms)
-            expiry_seconds = expiry_ms // 1000 if expiry_ms else 0  # Convert ms to seconds
+            # Always set expiry to 6 days from now (safe buffer before Gmail's 7-day limit)
+            expiry_seconds = int(time.time()) + (6 * 24 * 60 * 60)  # 6 days in seconds
+
+            print(f"Setting expiry to 6 days from now: {expiry_seconds}")
 
             # Store watch state in database
             watch_data = {

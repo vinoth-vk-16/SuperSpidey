@@ -158,6 +158,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             console.log('OAuth credentials stored successfully for user:', user.email);
 
+            // Check if user already has an active Gmail watch before starting a new one
+            try {
+              console.log('Checking Gmail watch status for user:', user.email);
+              const userCheckResponse = await fetch(`http://localhost:8000/get-auth/${user.email}`);
+              if (userCheckResponse.ok) {
+                // Check if user has active watch that expires more than 24 hours from now
+                // For now, we'll skip the check and always call start-watch to ensure watch is active
+                // TODO: Add proper watch status checking
+              }
+            } catch (checkError) {
+              if (checkError instanceof Error) {
+                console.log('Could not check existing watch status:', checkError.message);
+              } else {
+                console.log('Could not check existing watch status:', checkError);
+              }
+            }
+
             // Start Gmail watch for real-time notifications
             try {
               console.log('Starting Gmail watch for user:', user.email);

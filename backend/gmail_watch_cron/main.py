@@ -70,13 +70,6 @@ def renew_gmail_watch(user_email: str):
 
         user_data = user_doc.to_dict()
 
-        # Check if user already has an active watch
-        now = int(time.time())
-        existing_watch = user_data.get('gmail-watch')
-        if existing_watch and existing_watch.get('enabled') and existing_watch.get('expiry', 0) > now:
-            print(f"Watch already active for {user_email}")
-            return True
-
         # Build Gmail API client with provided access token
         creds = Credentials(token=user_creds['oauth'])
         gmail = build('gmail', 'v1', credentials=creds)
@@ -92,12 +85,11 @@ def renew_gmail_watch(user_email: str):
 
             # Extract response data
             history_id = response.get("historyId")
-            expiry_ms = response.get("expiration", 0)
 
-            # Convert to int if it's a string, then divide by 1000
-            if isinstance(expiry_ms, str):
-                expiry_ms = int(expiry_ms)
-            expiry_seconds = expiry_ms // 1000 if expiry_ms else 0  # Convert ms to seconds
+            # Always set expiry to 6 days from now (safe buffer before Gmail's 7-day limit)
+            expiry_seconds = int(time.time()) + (6 * 24 * 60 * 60)  # 6 days in seconds
+
+            print(f"Setting expiry to 6 days from now: {expiry_seconds}")
 
             # Store watch state in database
             watch_data = {
@@ -113,6 +105,18 @@ def renew_gmail_watch(user_email: str):
             })
 
             print(f"Successfully renewed Gmail watch for {user_email} with historyId {history_id}")
+            print(f"Updated expiry in database: {expiry_seconds}")
+
+            # Verify the update worked
+            updated_doc = user_ref.get()
+            if updated_doc.exists:
+                updated_data = updated_doc.to_dict()
+                updated_watch = updated_data.get('gmail-watch', {})
+                if updated_watch.get('expiry') == expiry_seconds:
+                    print(f"✅ Database update confirmed: expiry = {updated_watch.get('expiry')}")
+                else:
+                    print(f"❌ Database update failed: expected {expiry_seconds}, got {updated_watch.get('expiry')}")
+
             return True
 
         except Exception as e:
@@ -148,9 +152,15 @@ async def renew_expired_watches():
             # Check if user has Gmail watch enabled
             gmail_watch = user_data.get('gmail-watch')
             if not gmail_watch or not gmail_watch.get('enabled'):
+                print(f"User {user_email} has no active Gmail watch")
                 continue
 
             expiry = gmail_watch.get('expiry', 0)
+            history_id = gmail_watch.get('history_id', 'unknown')
+
+            # Debug: Show expiry details
+            hours_until_expiry = (expiry - now) / 3600 if expiry > now else -1
+            print(f"User {user_email} - expiry: {expiry}, now: {now}, one_day_from_now: {one_day_from_now}, hours_until_expiry: {hours_until_expiry:.1f}, history_id: {history_id}")
 
             # Check if expiry is within 1 day
             if expiry > 0 and expiry <= one_day_from_now:
