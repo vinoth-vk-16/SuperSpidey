@@ -1,15 +1,15 @@
 import { useState, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ChevronDown, Send, Loader2, ArrowLeft } from 'lucide-react';
+import { Sparkles, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import AIOverlay from '@/components/ai-overlay';
 import EditingPanel from '@/components/editing-panel';
 import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import Sidebar from '@/components/sidebar';
 
 export default function ComposePage() {
   const [, setLocation] = useLocation();
@@ -106,20 +106,20 @@ export default function ComposePage() {
   const [previousSubject, setPreviousSubject] = useState('');
 
   const handleDraftGenerated = (draft: string, subject?: string) => {
-    setPreviousBody(emailData.body); // Store current body before replacing
-    setPreviousSubject(emailData.subject); // Store current subject before replacing
+    setPreviousBody(emailData.body);
+    setPreviousSubject(emailData.subject);
     setEmailData(prev => ({ 
       ...prev, 
       body: draft,
-      subject: subject || prev.subject // Only update subject if provided
+      subject: subject || prev.subject
     }));
   };
 
   const handleDiscardGenerated = () => {
     setEmailData(prev => ({ 
       ...prev, 
-      body: previousBody, // Restore previous body
-      subject: previousSubject // Restore previous subject
+      body: previousBody,
+      subject: previousSubject
     }));
     setShowAI(false);
   };
@@ -127,154 +127,111 @@ export default function ComposePage() {
   const aiOverlayRef = useRef<any>(null);
 
   return (
-    <div className="h-full flex bg-white">
-      {/* Left Panel - Compose */}
-      <div className="w-2/3 flex flex-col border-r border-gray-200">
-        {/* Top Navigation */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white">
-          <div className="flex items-center space-x-1">
-            <Button variant="ghost" size="icon" className="h-6 w-6 p-0" onClick={() => setLocation('/')}>
-              <ArrowLeft className="h-3 w-3" />
-            </Button>
-            <span className="text-xs font-medium text-gray-900">New Message</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
-              <Send className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
+    <div className="h-screen flex bg-background overflow-hidden">
+      <Sidebar />
+      
+      {/* Empty Section */}
+      <div className="w-64 bg-background flex-shrink-0"></div>
 
-        {/* Compose Form */}
-        <div className="flex-1 p-3">
-          <div className="space-y-2">
-            {/* To Field */}
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-medium text-gray-600 w-8">To</span>
-              <Input
-                type="email"
-                value={emailData.to}
-                onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
-                className="flex-1 text-xs px-2 py-1 border-0 bg-transparent focus:outline-none focus:ring-0"
-                placeholder="Recipients"
-                data-testid="input-to"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowCcBcc(!showCcBcc)}
-                className="h-5 w-5 p-0"
-                data-testid="button-cc-bcc-toggle"
-              >
-                <ChevronDown className="w-3 h-3" />
-              </Button>
-            </div>
-
-            {/* CC/BCC Fields */}
-            {showCcBcc && (
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-medium text-gray-600 w-8">Cc</span>
-                  <Input
-                    type="email"
-                    value={emailData.cc}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
-                    className="flex-1 text-xs px-2 py-1 border-0 bg-transparent focus:outline-none focus:ring-0"
-                    placeholder="Cc"
-                    data-testid="input-cc"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-medium text-gray-600 w-8">Bcc</span>
-                  <Input
-                    type="email"
-                    value={emailData.bcc}
-                    onChange={(e) => setEmailData(prev => ({ ...prev, bcc: e.target.value }))}
-                    className="flex-1 text-xs px-2 py-1 border-0 bg-transparent focus:outline-none focus:ring-0"
-                    placeholder="Bcc"
-                    data-testid="input-bcc"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Subject Field */}
-            <div className="flex items-center space-x-2 border-t border-gray-200 pt-2">
-              <span className="text-xs font-medium text-gray-600 w-8">Subject</span>
-              <Input
-                type="text"
-                value={emailData.subject}
-                onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
-                className="flex-1 text-xs px-2 py-1 border-0 bg-transparent focus:outline-none focus:ring-0"
-                placeholder="Subject"
-                data-testid="input-subject"
-              />
-            </div>
-
-            {/* Email Body */}
-            <div className="border-t border-gray-200 pt-2">
-              <Textarea
-                placeholder="Tip: Hit cmd/ctrl + U for AI"
-                value={emailData.body}
-                onChange={(e) => setEmailData(prev => ({ ...prev, body: e.target.value }))}
-                className="w-full h-64 text-xs px-2 py-2 border-0 resize-none focus:outline-none focus:ring-0 bg-transparent"
-                data-testid="textarea-body"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between border-t border-gray-200 pt-2">
-              <div className="flex items-center space-x-2">
+      {/* Main Content Box with 8px margin */}
+      <div className="flex-1 p-2">
+        <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-auto custom-scrollbar">
+          <div className="max-w-4xl mx-auto py-6 px-6">
+            <div className="space-y-4">
+              {/* To Field */}
+              <div className="flex items-center space-x-4 pb-3 border-b border-border">
+                <span className="text-sm font-medium text-muted-foreground w-12">To</span>
+                <Input
+                  type="email"
+                  value={emailData.to}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, to: e.target.value }))}
+                  className="flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-foreground bg-transparent"
+                  placeholder="recipient@example.com"
+                  data-testid="input-to"
+                />
                 <Button
-                  onClick={handleSend}
-                  disabled={sendEmailMutation.isPending}
-                  className="px-3 py-1 text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  data-testid="button-send"
+                  variant="ghost"
                   size="sm"
+                  onClick={() => setShowCcBcc(!showCcBcc)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
                 >
-                  {sendEmailMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3 h-3 mr-1" />
-                      Send
-                    </>
-                  )}
+                  Cc/Bcc
                 </Button>
-                <span className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 cursor-pointer">
-                  Send later
-                </span>
-                <span className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 cursor-pointer">
-                  Remind me
-                </span>
-                <span className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 cursor-pointer">
-                  Share draft
-                </span>
+              </div>
+
+              {/* CC/BCC Fields */}
+              {showCcBcc && (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4 pb-3 border-b border-border">
+                    <span className="text-sm font-medium text-muted-foreground w-12">Cc</span>
+                    <Input
+                      type="email"
+                      value={emailData.cc}
+                      onChange={(e) => setEmailData(prev => ({ ...prev, cc: e.target.value }))}
+                      className="flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-foreground bg-transparent"
+                      placeholder="cc@example.com"
+                      data-testid="input-cc"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-4 pb-3 border-b border-border">
+                    <span className="text-sm font-medium text-muted-foreground w-12">Bcc</span>
+                    <Input
+                      type="email"
+                      value={emailData.bcc}
+                      onChange={(e) => setEmailData(prev => ({ ...prev, bcc: e.target.value }))}
+                      className="flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-foreground bg-transparent"
+                      placeholder="bcc@example.com"
+                      data-testid="input-bcc"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Subject Field */}
+              <div className="flex items-center space-x-4 pb-3 border-b border-border">
+                <span className="text-sm font-medium text-muted-foreground w-12">Subject</span>
+                <Input
+                  type="text"
+                  value={emailData.subject}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                  className="flex-1 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-foreground font-semibold bg-transparent"
+                  placeholder="What's this about?"
+                  data-testid="input-subject"
+                />
+              </div>
+
+              {/* Email Body */}
+              <div className="pt-4">
+                <Textarea
+                  placeholder="Write your message here... (Tip: Press Cmd/Ctrl + U for AI assistance)"
+                  value={emailData.body}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, body: e.target.value }))}
+                  className="w-full min-h-[400px] text-base border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-0 resize-none bg-transparent leading-relaxed"
+                  data-testid="textarea-body"
+                />
+              </div>
+
+              {/* Keyboard Shortcuts Hint */}
+              <div className="pt-4 border-t border-border">
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <kbd className="px-2 py-1 bg-muted rounded text-foreground font-mono text-xs">
+                      Cmd/Ctrl + Enter
+                    </kbd>
+                    <span>to send</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <kbd className="px-2 py-1 bg-muted rounded text-foreground font-mono text-xs">
+                      Cmd/Ctrl + U
+                    </kbd>
+                    <span>for AI assistance</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Right Panel - AI Assistant */}
-      <div className="w-1/3 flex flex-col bg-gray-50">
-        <div className="p-3 border-b border-gray-200 bg-white">
-          <h3 className="text-xs font-medium text-gray-900">AI Assistant</h3>
-        </div>
-        <div className="flex-1 p-3">
-          <div className="text-xs text-gray-500 mb-3">
-            Use AI to generate, improve, or enhance your email content.
-          </div>
-          <Button
-            onClick={() => setShowAI(true)}
-            className="w-full text-xs py-2 bg-blue-600 text-white hover:bg-blue-700"
-            size="sm"
-          >
-            Open AI Assistant
-          </Button>
         </div>
       </div>
 
@@ -286,19 +243,17 @@ export default function ComposePage() {
         />
       )}
 
-      {/* AI Overlay - Floating above compose card */}
+      {/* AI Overlay */}
       {showAI && (
         <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4"
           onClick={(e) => {
-            // Only handle clicks on the backdrop, not on the overlay content
             if (e.target === e.currentTarget) {
-              // Call the AIOverlay's handleOutsideClick method directly
               aiOverlayRef.current?.handleOutsideClick?.();
             }
           }}
         >
-          <div className="w-full max-w-2xl">
+          <div className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200">
             <AIOverlay
               ref={aiOverlayRef}
               isOpen={showAI}

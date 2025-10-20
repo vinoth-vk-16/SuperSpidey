@@ -1,81 +1,41 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --radius: 8px;
-  /* Light theme */
-  --background: hsl(0, 0%, 97%);
-  --foreground: hsl(130, 15%, 15%);
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(130, 15%, 15%);
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(130, 15%, 15%);
-  --primary: hsl(130, 35%, 22%);
-  --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(130, 25%, 35%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --muted: hsl(0, 0%, 93%);
-  --muted-foreground: hsl(130, 10%, 40%);
-  --accent: hsl(140, 45%, 25%);
-  --accent-foreground: hsl(0, 0%, 98%);
-  --destructive: hsl(0, 84%, 60%);
-  --destructive-foreground: hsl(0, 0%, 98%);
-  --border: hsl(0, 0%, 88%);
-  --input: hsl(0, 0%, 100%);
-  --ring: hsl(130, 35%, 22%);
-  --chart-1: hsl(130, 35%, 22%);
-  --chart-2: hsl(140, 45%, 25%);
-  --chart-3: hsl(130, 25%, 35%);
-  --chart-4: hsl(140, 40%, 35%);
-  --chart-5: hsl(130, 30%, 30%);
-  --sidebar: hsl(0, 0%, 100%);
-  --sidebar-foreground: hsl(130, 15%, 15%);
-  --sidebar-primary: hsl(130, 35%, 22%);
-  --sidebar-primary-foreground: hsl(0, 0%, 98%);
-  --sidebar-accent: hsl(0, 0%, 93%);
-  --sidebar-accent-foreground: hsl(130, 15%, 15%);
-  --sidebar-border: hsl(0, 0%, 88%);
-  --sidebar-ring: hsl(130, 35%, 22%);
-  --font-sans: Inter, system-ui, sans-serif;
+  --radius: 6px;
+  /* Dark Granola-inspired Theme - Dark Grey Aesthetic */
+  --background: hsl(0, 0%, 9%);          /* Very dark grey background */
+  --foreground: hsl(0, 0%, 95%);         /* Light grey text */
+  --card: hsl(0, 0%, 12%);               /* Dark grey cards */
+  --card-foreground: hsl(0, 0%, 95%);    /* Light grey card text */
+  --popover: hsl(0, 0%, 12%);            /* Dark grey popover */
+  --popover-foreground: hsl(0, 0%, 95%); /* Light grey popover text */
+  --primary: hsl(239, 84%, 67%);         /* Indigo accent */
+  --primary-foreground: hsl(0, 0%, 100%);/* White on primary */
+  --secondary: hsl(243, 80%, 70%);       /* Purple accent */
+  --secondary-foreground: hsl(0, 0%, 100%);/* White on secondary */
+  --muted: hsl(0, 0%, 15%);              /* Muted dark grey */
+  --muted-foreground: hsl(0, 0%, 60%);   /* Muted text grey */
+  --accent: hsl(217, 91%, 65%);          /* Blue accent */
+  --accent-foreground: hsl(0, 0%, 100%); /* White on accent */
+  --destructive: hsl(0, 84%, 60%);       /* Red for destructive */
+  --destructive-foreground: hsl(0, 0%, 100%);/* White on destructive */
+  --border: hsl(0, 0%, 20%);             /* Subtle dark borders */
+  --input: hsl(0, 0%, 15%);              /* Dark input backgrounds */
+  --ring: hsl(239, 84%, 67%);            /* Focus ring */
+  --sidebar: hsl(0, 0%, 11%);            /* Slightly lighter sidebar */
+  --sidebar-foreground: hsl(0, 0%, 95%); /* Light sidebar text */
+  --sidebar-primary: hsl(239, 84%, 67%); /* Indigo for active */
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);/* White on active */
+  --sidebar-accent: hsl(0, 0%, 15%);     /* Sidebar hover */
+  --sidebar-accent-foreground: hsl(0, 0%, 95%);/* Sidebar hover text */
+  --sidebar-border: hsl(0, 0%, 20%);     /* Sidebar borders */
+  --sidebar-ring: hsl(239, 84%, 67%);    /* Sidebar focus */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
-}
-
-.dark {
-  --background: hsl(115, 55%, 6%);
-  --foreground: hsl(0, 0%, 95%);
-  --card: hsl(115, 40%, 10%);
-  --card-foreground: hsl(0, 0%, 95%);
-  --popover: hsl(115, 40%, 10%);
-  --popover-foreground: hsl(0, 0%, 95%);
-  --primary: hsl(140, 45%, 25%);
-  --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(115, 40%, 15%);
-  --secondary-foreground: hsl(0, 0%, 95%);
-  --muted: hsl(115, 40%, 12%);
-  --muted-foreground: hsl(0, 0%, 65%);
-  --accent: hsl(140, 40%, 35%);
-  --accent-foreground: hsl(0, 0%, 98%);
-  --destructive: hsl(0, 62%, 30%);
-  --destructive-foreground: hsl(0, 0%, 98%);
-  --border: hsl(115, 40%, 18%);
-  --input: hsl(115, 40%, 12%);
-  --ring: hsl(140, 45%, 25%);
-  --chart-1: hsl(140, 45%, 25%);
-  --chart-2: hsl(140, 40%, 35%);
-  --chart-3: hsl(115, 40%, 15%);
-  --chart-4: hsl(115, 40%, 20%);
-  --chart-5: hsl(115, 40%, 25%);
-  --sidebar: hsl(115, 40%, 10%);
-  --sidebar-foreground: hsl(0, 0%, 95%);
-  --sidebar-primary: hsl(140, 45%, 25%);
-  --sidebar-primary-foreground: hsl(0, 0%, 98%);
-  --sidebar-accent: hsl(115, 40%, 12%);
-  --sidebar-accent-foreground: hsl(0, 0%, 95%);
-  --sidebar-border: hsl(115, 40%, 18%);
-  --sidebar-ring: hsl(140, 45%, 25%);
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Menlo, monospace;
 }
 
 @layer base {
@@ -85,32 +45,129 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    font-size: 13px;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+  }
+  
+  html {
+    scroll-behavior: smooth;
   }
 }
 
 @layer components {
-  .transition-all {
-    transition: all 0.2s ease-in-out;
+  /* Superhuman-inspired transitions */
+  .transition-smooth {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
+  .transition-subtle {
+    transition: all 0.1s ease-out;
+  }
+  
+  /* Email list hover effects */
+  .email-item {
+    @apply transition-smooth;
+  }
+  
+  .email-item:hover {
+    background-color: hsl(0, 0%, 15%, 0.8);
+    transform: translateX(2px);
+  }
+  
+  .email-item:hover .email-actions {
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .email-actions {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease-out, visibility 0.15s ease-out;
+  }
+  
+  /* Button hover effects */
+  .btn-superhuman {
+    @apply transition-smooth;
+  }
+  
+  .btn-superhuman:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+  }
+  
+  .btn-superhuman:active {
+    transform: translateY(0);
+  }
+  
+  /* Sidebar styles */
   .sidebar-icon {
-    transition: all 0.15s ease-in-out;
+    @apply transition-smooth;
   }
   
   .sidebar-icon:hover {
-    transform: scale(1.05);
+    transform: scale(1.08);
   }
   
+  /* Focus rings */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1;
+  }
+  
+  /* Smooth scrolling - Dark theme optimized */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(0, 0%, 25%);
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(0, 0%, 35%);
+  }
+  
+  /* Search bar */
+  .search-input {
+    @apply transition-smooth;
+  }
+  
+  .search-input:focus {
+    transform: scale(1.02);
+  }
+  
+  /* Card shadows */
+  .card-superhuman {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  
+  .card-superhuman:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Loading state */
+  .pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  
+  /* Backdrop blur */
   .modal-overlay {
-    backdrop-filter: blur(4px);
-  }
-  
-  .compose-card {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  }
-  
-  .suggestion-item:hover {
-    background-color: var(--muted);
+    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.3);
   }
 }

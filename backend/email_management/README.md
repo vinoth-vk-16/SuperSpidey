@@ -52,7 +52,7 @@ Send an email using the user's stored OAuth credentials.
 - `500`: Failed to send email or other server errors
 
 ### POST /fetch-emails
-Fetch paginated emails for a user from Firestore (not from Gmail).
+Fetch paginated email threads for a user from Firestore (not from Gmail).
 
 **Request Body:**
 ```json
@@ -65,42 +65,43 @@ Fetch paginated emails for a user from Firestore (not from Gmail).
 **Response:**
 ```json
 {
-  "emails": [
+  "threads": [
     {
-      "messageId": "1234567890abcdef",
       "threadId": "thread123",
-      "from_": "sender@example.com",
-      "to": ["recipient@example.com"],
       "subject": "Email Subject",
-      "snippet": "Short preview of email...",
-      "body": "Full email content...",
-      "headers": {
-        "X-MyApp-ID": "ContactSpidey",
-        "Date": "2024-01-01T12:00:00.000Z",
-        "From": "sender@example.com",
-        "To": "recipient@example.com",
-        "Subject": "Email Subject"
-      },
-      "labels": ["SENT"],
-      "isRead": true,
-      "isSent": true,
+      "from": "sender@example.com",
       "timestamp": "2024-01-01T12:00:00.000Z",
-      "threadMessagesCount": 1,
-      "cc": ["cc@example.com"],
-      "bcc": ["bcc@example.com"]
+      "messageCount": 3,
+      "isRead": false,
+      "messages": [
+        {
+          "messageId": "msg456",
+          "threadId": "thread123",
+          "from": "sender@example.com",
+          "to": ["recipient@example.com"],
+          "subject": "Email Subject",
+          "snippet": "Short preview of email...",
+          "body": "Full email content...",
+          "timestamp": "2024-01-01T12:00:00.000Z",
+          "isRead": false,
+          "isSent": false
+        }
+      ]
     }
   ],
-  "total_count": 150,
+  "total_count": 45,
   "page": 1,
   "has_more": true
 }
 ```
 
 **Features:**
-- Returns 30 emails per page
-- Sorted by timestamp (most recent first)
+- Groups emails by thread (conversation)
+- Returns 30 threads per page
+- Sorted by latest message timestamp (most recent first)
 - Pagination support (page 1, 2, 3, etc.)
-- Includes CC/BCC fields when available
+- Thread-level read status (true if all messages in thread are read)
+- Simplified email structure for frontend display
 
 ### POST /refresh-emails
 Refresh emails for a user from Gmail API after the lastSyncTimestamp, filtering by custom header.

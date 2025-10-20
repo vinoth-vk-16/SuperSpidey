@@ -66,25 +66,29 @@ class EmailResponse(BaseModel):
     message_id: str
     success: bool
 
-class EmailData(BaseModel):
+class SimplifiedEmail(BaseModel):
     messageId: str
     threadId: str
     from_: str  # 'from' is a reserved keyword in Python
     to: List[str]
     subject: str
     snippet: str
-    body: str
-    headers: Dict[str, Any]
-    labels: List[str]
+    body: str  # Full email body
+    timestamp: str  # ISO format string
     isRead: bool
     isSent: bool
-    timestamp: str  # ISO format string
-    threadMessagesCount: int
-    cc: Optional[List[str]] = None
-    bcc: Optional[List[str]] = None
+
+class ThreadGroup(BaseModel):
+    threadId: str
+    subject: str
+    from_: str
+    timestamp: str  # Latest message timestamp
+    messageCount: int
+    isRead: bool  # True if all messages in thread are read
+    messages: List[SimplifiedEmail]
 
 class FetchEmailsResponse(BaseModel):
-    emails: List[EmailData]
+    threads: List[ThreadGroup]
     total_count: int
     page: int
     has_more: bool
@@ -273,69 +277,79 @@ def store_email_in_firestore(user_email: str, message_id: str, email_data: Dict[
         return False
 
 def fetch_user_emails(user_email: str, page: int = 1, per_page: int = 30):
-    """Fetch paginated emails for a user from Firestore"""
+    """Fetch paginated emails grouped by thread for a user from Firestore"""
     try:
         # Reference to user's emails subcollection
         emails_ref = db.collection('users').document(user_email).collection('emails')
 
-        # Get total count first
-        total_count = 0
-        for _ in emails_ref.stream():
-            total_count += 1
-
-        # Calculate offset and limit
-        offset = (page - 1) * per_page
-        limit = per_page
-
-        # Query emails ordered by timestamp descending (most recent first)
+        # Get all emails first (since Firestore doesn't have efficient offset)
         query = emails_ref.order_by('timestamp', direction=firestore.Query.DESCENDING)
-
-        # Get all emails (since Firestore doesn't have efficient offset)
         all_emails = []
         for doc in query.stream():
             email_data = doc.to_dict()
-            all_emails.append({
-                'id': doc.id,
-                'data': email_data
-            })
+            all_emails.append(email_data)
 
-        # Apply pagination manually
-        paginated_emails = all_emails[offset:offset + limit]
+        # Group emails by thread
+        thread_groups = {}
+        for email_data in all_emails:
+            thread_id = email_data.get('threadId', email_data.get('messageId', ''))
+            if thread_id not in thread_groups:
+                thread_groups[thread_id] = []
 
-        # Convert to response format
-        emails = []
-        for email in paginated_emails:
-            email_data = email['data']
-            email_obj = EmailData(
-                messageId=email_data.get('messageId', ''),
-                threadId=email_data.get('threadId', ''),
-                from_=email_data.get('from', ''),
-                to=email_data.get('to', []),
-                subject=email_data.get('subject', ''),
-                snippet=email_data.get('snippet', ''),
-                body=email_data.get('body', ''),
-                headers=email_data.get('headers', {}),
-                labels=email_data.get('labels', []),
-                isRead=email_data.get('isRead', False),
-                isSent=email_data.get('isSent', False),
-                timestamp=email_data.get('timestamp', datetime.now()).isoformat() if hasattr(email_data.get('timestamp'), 'isoformat') else str(email_data.get('timestamp', '')),
-                threadMessagesCount=email_data.get('threadMessagesCount', 1)
+            # Create simplified email object
+            simplified_email = {
+                'messageId': email_data.get('messageId', ''),
+                'threadId': thread_id,
+                'from_': email_data.get('from', ''),
+                'to': email_data.get('to', []),
+                'subject': email_data.get('subject', ''),
+                'snippet': email_data.get('snippet', ''),
+                'body': email_data.get('body', ''),  # Include full email body
+                'timestamp': email_data.get('timestamp', datetime.now()).isoformat() if hasattr(email_data.get('timestamp'), 'isoformat') else str(email_data.get('timestamp', '')),
+                'isRead': email_data.get('isRead', False),
+                'isSent': email_data.get('isSent', False)
+            }
+            thread_groups[thread_id].append(simplified_email)
+
+        # Convert thread groups to ThreadGroup objects
+        threads = []
+        for thread_id, messages in thread_groups.items():
+            if not messages:
+                continue
+
+            # Sort messages by timestamp (newest first)
+            messages.sort(key=lambda x: x['timestamp'], reverse=True)
+
+            # Thread info from the latest message
+            latest_message = messages[0]
+            all_read = all(msg['isRead'] for msg in messages)
+
+            thread_group = ThreadGroup(
+                threadId=thread_id,
+                subject=latest_message['subject'],
+                from_=latest_message['from_'],
+                timestamp=latest_message['timestamp'],
+                messageCount=len(messages),
+                isRead=all_read,
+                messages=[SimplifiedEmail(**msg) for msg in messages]
             )
+            threads.append(thread_group)
 
-            # Add optional fields
-            if email_data.get('cc'):
-                email_obj.cc = email_data['cc']
-            if email_data.get('bcc'):
-                email_obj.bcc = email_data['bcc']
+        # Sort threads by latest message timestamp (newest first)
+        threads.sort(key=lambda x: x.timestamp, reverse=True)
 
-            emails.append(email_obj)
+        # Apply pagination at thread level
+        total_threads = len(threads)
+        offset = (page - 1) * per_page
+        limit = per_page
+        paginated_threads = threads[offset:offset + limit]
 
         # Check if there are more pages
-        has_more = offset + limit < total_count
+        has_more = offset + limit < total_threads
 
         return FetchEmailsResponse(
-            emails=emails,
-            total_count=total_count,
+            threads=paginated_threads,
+            total_count=total_threads,
             page=page,
             has_more=has_more
         )
