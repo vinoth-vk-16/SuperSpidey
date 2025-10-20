@@ -7,30 +7,50 @@ import { format } from 'date-fns';
 import Sidebar from '@/components/sidebar';
 import { Textarea } from '@/components/ui/textarea';
 
-interface Email {
-  id: string;
-  threadId: string;
+interface Message {
+  messageId: string;
+  from_: string;
+  to_: string[];
   subject: string;
-  from: string;
-  to: string;
-  date: string;
   body: string;
   snippet: string;
+  timestamp: string;
+  isRead: boolean;
+}
+
+interface EmailThread {
+  threadId: string;
+  subject: string;
+  from_: string;
+  timestamp: string;
+  messageCount: number;
+  isRead: boolean;
+  messages: Message[];
 }
 
 export default function EmailDetailPage() {
   const [, setLocation] = useLocation();
-  const [emailId] = useState(() => {
+  const [messageId] = useState(() => {
     const path = window.location.pathname;
     return path.split('/email/')[1];
   });
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: emailData, isLoading, error } = useQuery({
-    queryKey: ['emails'],
+    queryKey: ['emails', currentPage],
     queryFn: async () => {
-      const response = await fetch('/api/gmail/messages');
+      const response = await fetch('https://superspidey-email-management.onrender.com/fetch-emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_email: 'imvinothvk521@gmail.com',
+          page: currentPage,
+        }),
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch emails');
       }
@@ -38,8 +58,20 @@ export default function EmailDetailPage() {
     },
   });
 
-  const emails: Email[] = emailData?.messages || [];
-  const email = emails.find(e => e.id === emailId);
+  const threads: EmailThread[] = emailData?.threads || [];
+  
+  // Find the message across all threads
+  let currentMessage: Message | undefined;
+  let currentThread: EmailThread | undefined;
+  
+  for (const thread of threads) {
+    const message = thread.messages.find(m => m.messageId === messageId);
+    if (message) {
+      currentMessage = message;
+      currentThread = thread;
+      break;
+    }
+  }
 
   const getSenderName = (from: string) => {
     if (from.includes('<')) {
@@ -74,7 +106,7 @@ export default function EmailDetailPage() {
     );
   }
 
-  if (error || !email) {
+  if (error || !currentMessage) {
     return (
       <div className="h-screen flex bg-background">
         <Sidebar />
@@ -109,38 +141,77 @@ export default function EmailDetailPage() {
           <div className="max-w-3xl mx-auto py-8 px-6">
             {/* Subject */}
             <h1 className="text-2xl font-semibold text-foreground mb-6">
-              {email.subject || '(No subject)'}
+              {currentMessage.subject || currentThread?.subject || '(No subject)'}
             </h1>
+
+            {/* Thread info if multiple messages */}
+            {currentThread && currentThread.messageCount > 1 && (
+              <div className="mb-6 p-4 bg-muted/30 rounded-lg border border-border">
+                <div className="text-sm text-muted-foreground">
+                  This is part of a conversation with {currentThread.messageCount} messages
+                </div>
+              </div>
+            )}
 
             {/* Sender Info */}
             <div className="flex items-start justify-between mb-8 pb-6 border-b border-border">
               <div className="flex items-start space-x-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-semibold text-sm flex-shrink-0">
-                  {getSenderName(email.from).charAt(0).toUpperCase()}
+                  {getSenderName(currentMessage.from_).charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <div className="font-semibold text-foreground">
-                    {getSenderName(email.from)}
+                    {getSenderName(currentMessage.from_)}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {getSenderEmail(email.from)}
+                    {getSenderEmail(currentMessage.from_)}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    to {email.to}
+                    to {currentMessage.to_.join(', ')}
                   </div>
                 </div>
               </div>
               <div className="text-sm text-muted-foreground">
-                {format(new Date(email.date), 'MMM d, yyyy • h:mm a')}
+                {format(new Date(currentMessage.timestamp), 'MMM d, yyyy • h:mm a')}
               </div>
             </div>
 
             {/* Email Body */}
             <div className="prose prose-sm max-w-none">
               <div className="text-foreground leading-relaxed whitespace-pre-wrap">
-                {email.body}
+                {currentMessage.body.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
               </div>
             </div>
+
+            {/* Display other messages in the thread */}
+            {currentThread && currentThread.messages.length > 1 && (
+              <div className="mt-12 space-y-6">
+                <h3 className="text-lg font-semibold text-foreground border-b border-border pb-3">
+                  Other messages in this thread
+                </h3>
+                {currentThread.messages
+                  .filter(msg => msg.messageId !== messageId)
+                  .map((msg) => (
+                    <div
+                      key={msg.messageId}
+                      className="p-4 bg-muted/20 rounded-lg border border-border hover:border-primary/50 cursor-pointer transition-smooth"
+                      onClick={() => setLocation(`/email/${msg.messageId}`)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-foreground text-sm">
+                          {getSenderName(msg.from_)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(msg.timestamp), 'MMM d • h:mm a')}
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground line-clamp-2">
+                        {msg.snippet.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
 
             {/* Reply Section */}
             <div className="mt-12 pt-8 border-t border-border">
@@ -165,7 +236,7 @@ export default function EmailDetailPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-sm font-semibold text-foreground">
-                      Reply to {getSenderName(email.from)}
+                      Reply to {getSenderName(currentMessage.from_)}
                     </div>
                     <Button
                       variant="ghost"
