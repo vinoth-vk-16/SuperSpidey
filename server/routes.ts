@@ -157,6 +157,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Continue with authentication even if storage fails
           } else {
             console.log('OAuth credentials stored successfully for user:', user.email);
+
+            // Start Gmail watch for real-time notifications
+            try {
+              console.log('Starting Gmail watch for user:', user.email);
+              const startWatchResponse = await fetch('http://localhost:8001/start-watch', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  user_email: user.email,
+                  access_token: user.accessToken,
+                }),
+              });
+
+              if (!startWatchResponse.ok) {
+                console.error('Failed to start Gmail watch:', await startWatchResponse.text());
+                // Continue with authentication even if watch fails
+              } else {
+                const watchData = await startWatchResponse.json();
+                console.log('Gmail watch started successfully for user:', user.email, 'History ID:', watchData.data?.history_id);
+              }
+            } catch (watchError) {
+              console.error('Error starting Gmail watch:', watchError);
+              // Continue with authentication even if watch fails
+            }
           }
         } else {
           console.log('Skipping OAuth storage - missing tokens. AccessToken:', !!user.accessToken, 'RefreshToken:', !!user.refreshToken);

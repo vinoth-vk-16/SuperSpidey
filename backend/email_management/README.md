@@ -176,6 +176,51 @@ Handle Gmail Pub/Sub notifications for real-time email synchronization.
 - Updates `lastSyncTimestamp` when emails are synced
 - Handles token refresh automatically
 
+### POST /start-watch
+Start Gmail watch for a user to enable real-time email notifications.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "access_token": "ya29.a0ARrdaM....",
+  "topic_name": "projects/contact-remedy/topics/gmail-notifications"
+}
+```
+
+**Note:** `topic_name` is optional and defaults to `projects/contact-remedy/topics/gmail-notifications`
+
+**Response (Success):**
+```json
+{
+  "message": "Watch started successfully",
+  "data": {
+    "history_id": "123456789",
+    "expiry": 1734803940,
+    "enabled": true,
+    "topic_name": "projects/contact-remedy/topics/gmail-notifications"
+  }
+}
+```
+
+**Response (Already Active):**
+```json
+{
+  "message": "Watch already active",
+  "data": {
+    "history_id": "123456789",
+    "expiry": 1734803940,
+    "enabled": true
+  }
+}
+```
+
+**Features:**
+- Checks if user already has an active watch before starting new one
+- Calls Gmail Watch API to subscribe to INBOX notifications
+- Stores watch state in database (gmail-watch.enabled, expiry, history_id)
+- Returns existing watch info if already active
+
 ## Features
 
 - **Token Management**: Automatically refreshes expired access tokens using refresh tokens
@@ -219,9 +264,8 @@ Collection: users
 
 ## Dependencies
 
-- OAuth Storage Service (port 8000) - for retrieving/storing user credentials
 - Google Gmail API - for sending emails
-- Firestore - for credential and email data storage
+- Firestore - for credential and email data storage (direct access)
 
 ## Email Format
 

@@ -12,6 +12,7 @@ import base64
 import os
 import json
 import re
+import time
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -97,10 +98,15 @@ class GmailWebhookRequest(BaseModel):
     message: Dict[str, Any]
     subscription: str
 
+class StartWatchRequest(BaseModel):
+    user_email: str
+    access_token: str
+    topic_name: str = "projects/contact-remedy/topics/gmail-notifications"
+
 def get_user_credentials(user_email: str):
-    """Get user OAuth credentials directly from Firestore"""
+    """Get user OAuth credentials directly from Firestore google_oauth_credentials collection"""
     try:
-        # Reference to the document with user email as ID
+        # Reference to the document with user email as ID in google_oauth_credentials collection
         doc_ref = db.collection('google_oauth_credentials').document(user_email)
 
         # Get the document
@@ -978,6 +984,94 @@ async def gmail_webhook(request: GmailWebhookRequest):
     except Exception as e:
         print(f"Error processing Gmail webhook: {e}")
         raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)}")
+
+@app.post("/start-watch")
+async def start_gmail_watch(request: StartWatchRequest):
+    """Start Gmail watch for a user to receive real-time notifications"""
+    try:
+        user_email = request.user_email
+        access_token = request.access_token
+        topic_name = request.topic_name
+
+        # Check if user exists in database
+        user_ref = db.collection('users').document(user_email)
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="User not found in database")
+
+        user_data = user_doc.to_dict()
+
+        # Check if user already has an active watch
+        now = int(time.time())
+        existing_watch = user_data.get('gmail-watch')
+
+        if existing_watch and existing_watch.get('enabled') and existing_watch.get('expiry', 0) > now:
+            return {
+                "message": "Watch already active",
+                "data": {
+                    "history_id": existing_watch.get("history_id"),
+                    "expiry": existing_watch.get("expiry"),
+                    "enabled": True
+                }
+            }
+
+        # Build Gmail API client with provided access token
+        creds = Credentials(token=access_token)
+        gmail = build('gmail', 'v1', credentials=creds)
+
+        # Call Gmail watch API
+        watch_body = {
+            "labelIds": ["INBOX"],
+            "topicName": topic_name
+        }
+
+        try:
+            response = gmail.users().watch(userId='me', body=watch_body).execute()
+
+            # Extract response data
+            history_id = response.get("historyId")
+            expiry_ms = response.get("expiration", 0)
+
+            # Convert to int if it's a string, then divide by 1000
+            if isinstance(expiry_ms, str):
+                expiry_ms = int(expiry_ms)
+            expiry_seconds = expiry_ms // 1000 if expiry_ms else 0  # Convert ms to seconds
+
+            # Store watch state in database
+            watch_data = {
+                "enabled": True,
+                "history_id": history_id,
+                "expiry": expiry_seconds,
+                "topic_name": topic_name,
+                "started_at": firestore.SERVER_TIMESTAMP
+            }
+
+            user_ref.update({
+                "gmail-watch": watch_data
+            })
+
+            print(f"Started Gmail watch for user {user_email} with historyId {history_id}")
+
+            return {
+                "message": "Watch started successfully",
+                "data": {
+                    "history_id": history_id,
+                    "expiry": expiry_seconds,
+                    "enabled": True,
+                    "topic_name": topic_name
+                }
+            }
+
+        except Exception as e:
+            print(f"Error starting Gmail watch for {user_email}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to start Gmail watch: {str(e)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in start-watch: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.get("/health")
 async def health_check():

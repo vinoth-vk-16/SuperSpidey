@@ -89,6 +89,7 @@ export default function LoginPage() {
           <div className="text-center text-xs text-slate-500 dark:text-slate-400 space-y-1">
             <p>Sign in to start creating amazing emails</p>
             <p>You'll be asked to grant Gmail access for sending and receiving emails</p>
+            <p>Real-time email notifications will be automatically enabled</p>
           </div>
         </CardContent>
       </Card>
