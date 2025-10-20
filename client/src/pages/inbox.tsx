@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter';
-import { Search, Archive, Trash2, Clock, Check, RotateCcw, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, Archive, Trash2, Clock, Check, RotateCcw, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
@@ -34,7 +34,6 @@ export default function InboxPage() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
-  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
 
@@ -125,16 +124,6 @@ export default function InboxPage() {
       newSelection.add(threadId);
     }
     setSelectedThreadIds(newSelection);
-  };
-
-  const toggleThreadExpansion = (threadId: string) => {
-    const newExpanded = new Set(expandedThreads);
-    if (newExpanded.has(threadId)) {
-      newExpanded.delete(threadId);
-    } else {
-      newExpanded.add(threadId);
-    }
-    setExpandedThreads(newExpanded);
   };
 
   if (isLoading) {
@@ -272,9 +261,7 @@ export default function InboxPage() {
                     key={thread.threadId}
                     thread={thread}
                     isSelected={selectedThreadIds.has(thread.threadId)}
-                    isExpanded={expandedThreads.has(thread.threadId)}
                     onToggleSelect={toggleThreadSelection}
-                    onToggleExpand={toggleThreadExpansion}
                     onClick={() => setLocation(`/email/${thread.messages[0].messageId}`)}
                   />
                 ))}
@@ -317,13 +304,11 @@ export default function InboxPage() {
 interface EmailThreadItemProps {
   thread: EmailThread;
   isSelected: boolean;
-  isExpanded: boolean;
   onToggleSelect: (id: string) => void;
-  onToggleExpand: (id: string) => void;
   onClick: () => void;
 }
 
-function EmailThreadItem({ thread, isSelected, isExpanded, onToggleSelect, onToggleExpand, onClick }: EmailThreadItemProps) {
+function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailThreadItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [, setLocation] = useLocation();
 
@@ -343,78 +328,76 @@ function EmailThreadItem({ thread, isSelected, isExpanded, onToggleSelect, onTog
   const latestMessage = thread.messages[0];
 
   return (
-    <div className="border-b border-border">
+    <div>
       {/* Main Thread Row */}
       <div
-        className={`email-item group px-6 py-4 cursor-pointer ${
+        className={`email-item group cursor-pointer ${
           isSelected ? 'bg-primary/10' : ''
         } ${!thread.isRead ? 'bg-muted/20' : ''}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={onClick}
       >
-        <div className="flex items-start space-x-4">
-          {/* Expand/Collapse Button for threads with multiple messages */}
-          {thread.messageCount > 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand(thread.threadId);
-              }}
-              className="flex-shrink-0 pt-0.5 text-muted-foreground hover:text-foreground transition-smooth"
-            >
-              {isExpanded ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-            </button>
-          )}
+        {/* Content with padding */}
+        <div className="px-6 py-2.5">
+          <div className="flex items-center gap-2 w-full">
+            {/* Checkbox - visible on hover */}
+            <div className={`flex-shrink-0 ${isHovered || isSelected ? 'opacity-100' : 'opacity-0'}`}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect(thread.threadId);
+                }}
+                className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-smooth ${
+                  isSelected
+                    ? 'bg-primary border-primary'
+                    : 'border-border hover:border-primary'
+                }`}
+              >
+                {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+              </button>
+            </div>
 
-          {/* Checkbox - visible on hover */}
-          <div className={`flex-shrink-0 pt-0.5 ${isHovered || isSelected ? 'opacity-100' : 'opacity-0'}`}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSelect(thread.threadId);
-              }}
-              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-smooth ${
-                isSelected
-                  ? 'bg-primary border-primary'
-                  : 'border-border hover:border-primary'
-              }`}
-            >
-              {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
-            </button>
-          </div>
-
-          {/* Thread Content */}
-              <div className="flex-1 min-w-0">
-            <div className="flex items-baseline justify-between mb-1">
-              <div className="flex items-center space-x-3 min-w-0 flex-1">
-                <span className={`text-sm truncate ${!thread.isRead ? 'font-bold text-foreground' : 'font-semibold text-foreground'}`}>
-                  {getSenderName(thread.from_)}
-                </span>
-                <span className={`text-sm truncate flex-1 ${!thread.isRead ? 'font-semibold text-foreground' : 'font-medium text-foreground'}`}>
-                  {thread.subject || '(No subject)'}
-                </span>
-                {thread.messageCount > 1 && (
-                  <span className="flex-shrink-0 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    {thread.messageCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs text-muted-foreground flex-shrink-0 ml-4">
-                {formatDistanceToNow(new Date(thread.timestamp), { addSuffix: true }).replace('about ', '')}
+            {/* Sender Name - Left aligned, compact */}
+            <div className="flex-shrink-0 w-36">
+              <span className={`text-xs truncate block ${!thread.isRead ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
+                {getSenderName(thread.from_)}
               </span>
             </div>
-            <p className="text-sm text-muted-foreground truncate">
-              {latestMessage.snippet.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
-            </p>
-          </div>
 
-          {/* Quick Actions - visible on hover */}
-          <div className={`email-actions flex items-center space-x-1 flex-shrink-0 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+            {/* Subject - Compact width */}
+            <div className="flex-shrink-0 w-48">
+              <span className={`text-xs truncate block ${!thread.isRead ? 'font-semibold text-foreground' : 'font-normal text-foreground'}`}>
+                {thread.subject || '(No subject)'}
+              </span>
+            </div>
+
+            {/* Separator */}
+            <span className="text-xs text-muted-foreground flex-shrink-0 px-1">—</span>
+
+            {/* Snippet - Takes remaining space */}
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <p className="text-xs text-muted-foreground truncate">
+                {latestMessage.snippet.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
+              </p>
+            </div>
+
+            {/* Thread Count Badge */}
+            {thread.messageCount > 1 && (
+              <span className="flex-shrink-0 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-2">
+                {thread.messageCount}
+              </span>
+            )}
+
+            {/* Timestamp - Compact */}
+            <div className="flex-shrink-0 w-12 text-right ml-2">
+              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                {formatDistanceToNow(new Date(thread.timestamp), { addSuffix: true }).replace('about ', '').replace(' ago', '')}
+              </span>
+            </div>
+
+            {/* Quick Actions - visible on hover */}
+            <div className={`email-actions flex items-center gap-0.5 flex-shrink-0 ml-1 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
             <Button
               variant="ghost"
               size="icon"
@@ -422,10 +405,10 @@ function EmailThreadItem({ thread, isSelected, isExpanded, onToggleSelect, onTog
                 e.stopPropagation();
                 // Archive action
               }}
-              className="h-8 w-8 rounded-lg hover:bg-muted"
+              className="h-7 w-7 rounded hover:bg-muted"
               title="Archive"
             >
-              <Archive className="w-4 h-4" />
+              <Archive className="w-3.5 h-3.5" />
             </Button>
             <Button
               variant="ghost"
@@ -434,10 +417,10 @@ function EmailThreadItem({ thread, isSelected, isExpanded, onToggleSelect, onTog
                 e.stopPropagation();
                 // Delete action
               }}
-              className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive"
+              className="h-7 w-7 rounded hover:bg-destructive/20 hover:text-destructive"
               title="Delete"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
             </Button>
             <Button
               variant="ghost"
@@ -446,41 +429,17 @@ function EmailThreadItem({ thread, isSelected, isExpanded, onToggleSelect, onTog
                 e.stopPropagation();
                 // Snooze action
               }}
-              className="h-8 w-8 rounded-lg hover:bg-muted"
+              className="h-7 w-7 rounded hover:bg-muted"
               title="Snooze"
             >
-              <Clock className="w-4 h-4" />
+              <Clock className="w-3.5 h-3.5" />
             </Button>
-                </div>
-              </div>
             </div>
-
-      {/* Expanded Messages */}
-      {isExpanded && thread.messageCount > 1 && (
-        <div className="bg-muted/30 border-t border-border">
-          {thread.messages.slice(1).map((message, index) => (
-            <div
-              key={message.messageId}
-              className="px-6 py-3 pl-20 border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-smooth"
-              onClick={() => setLocation(`/email/${message.messageId}`)}
-            >
-              <div className="flex items-baseline justify-between mb-1">
-                <div className="flex items-center space-x-3 min-w-0 flex-1">
-                  <span className="text-xs text-muted-foreground truncate">
-                    {getSenderName(message.from_)}
-                  </span>
-                  <span className="text-xs text-muted-foreground truncate flex-1">
-                    {message.snippet.substring(0, 80).replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')}...
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground flex-shrink-0 ml-4">
-                  {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true }).replace('about ', '')}
-                </span>
-              </div>
-            </div>
-          ))}
+          </div>
         </div>
-      )}
+      </div>
+      {/* Full-width border line touching both ends */}
+      <div className="border-b border-border"></div>
     </div>
   );
 }

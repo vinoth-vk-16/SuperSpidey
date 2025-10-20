@@ -193,11 +193,11 @@ export default function EmailDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex bg-background">
+      <div className="h-screen flex bg-background overflow-hidden">
         <Sidebar />
         {/* Empty Section */}
         <div className="w-64 bg-background flex-shrink-0"></div>
-        {/* Main Content Box */}
+        {/* Main Content Box with 8px margin */}
         <div className="flex-1 p-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
             <div className="text-center">
@@ -212,11 +212,11 @@ export default function EmailDetailPage() {
 
   if (error || !currentMessage) {
     return (
-      <div className="h-screen flex bg-background">
+      <div className="h-screen flex bg-background overflow-hidden">
         <Sidebar />
         {/* Empty Section */}
         <div className="w-64 bg-background flex-shrink-0"></div>
-        {/* Main Content Box */}
+        {/* Main Content Box with 8px margin */}
         <div className="flex-1 p-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
             <div className="text-center">
@@ -232,17 +232,17 @@ export default function EmailDetailPage() {
   }
 
   return (
-    <div className="h-screen flex bg-background">
+    <div className="h-screen flex bg-background overflow-hidden">
       <Sidebar />
       
       {/* Empty Section */}
-      <div className="w-64 bg-background border-r border-border flex-shrink-0"></div>
+      <div className="w-64 bg-background flex-shrink-0"></div>
 
-      {/* Main Content Box with 5px margin */}
-      <div className="flex-1 p-[5px]">
+      {/* Main Content Box with 8px margin (same as inbox) */}
+      <div className="flex-1 p-2">
         <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
           <div className="flex-1 overflow-auto custom-scrollbar">
-          <div className="max-w-4xl mx-auto py-6 px-6">
+          <div className="max-w-5xl mx-auto py-6 px-6">
             {/* Subject */}
             <h1 className="text-xl font-semibold text-foreground mb-6">
               {(currentThread?.subject || currentMessage.subject || '(No subject)').replace(/^Re:\s*/i, '')}
