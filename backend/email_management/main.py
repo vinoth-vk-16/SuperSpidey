@@ -1503,62 +1503,55 @@ async def fetch_user_info(user_email: str):
 
 @app.get("/track-email-view/{tracker_id}")
 async def track_email_view(tracker_id: str, user_email: str, request: Request):
-    """Track email view by updating view_status using tracker_id and logging view data"""
+    """Track email view by logging view data and updating email status"""
     try:
         # Get tracking data
         ip = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("user-agent", "unknown")
 
-        # Create tracking data
-        tracking_data = {
+        # Log tracking data to a separate collection (like the reference implementation)
+        tracking_doc = {
+            'tracker_id': tracker_id,
+            'user_email': user_email,
             'ip': ip,
             'user_agent': user_agent,
-            'timestamp': datetime.now(),
+            'timestamp': datetime.utcnow(),
             'viewed_at': firestore.SERVER_TIMESTAMP
         }
 
-        # Query for the specific email with this trackerId in the user's collection
-        emails_ref = db.collection('users').document(user_email).collection('emails')
-        query = emails_ref.where('trackerId', '==', tracker_id).limit(1)
+        # Insert tracking data
+        tracking_ref = db.collection('email_tracking').document()
+        tracking_ref.set(tracking_doc)
+        print(f"✅ Logged tracking data for tracker {tracker_id}, user {user_email}")
 
-        print(f"🔍 Searching for tracker_id: {tracker_id} for user: {user_email}")
+        # Now try to find and update the email
+        try:
+            emails_ref = db.collection('users').document(user_email).collection('emails')
+            query = emails_ref.where('trackerId', '==', tracker_id).limit(1)
+            matching_emails = query.stream()
 
-        matching_emails = query.stream()
-        email_docs = list(matching_emails)
-
-        print(f"📊 Found {len(email_docs)} matching emails")
-
-        found = False
-        for email_doc in email_docs:
-            email_data = email_doc.to_dict()
-            print(f"📧 Found email: {email_doc.id}, trackerId: {email_data.get('trackerId')}, subject: {email_data.get('subject', 'N/A')}")
-
-            # Update view_status and add tracking data
-            email_ref = emails_ref.document(email_doc.id)
-            email_ref.update({
-                'view_status': True,
-                'view_tracking': firestore.ArrayUnion([tracking_data])
-            })
-            print(f"✅ Successfully updated view_status for email {email_doc.id} with tracker {tracker_id}")
-            found = True
-            break
-
-        if not found:
-            print(f"⚠️ No email found with tracker {tracker_id} for user {user_email}")
-            # Let's also check if there are any emails at all for this user
-            all_emails = emails_ref.limit(5).stream()
-            email_count = sum(1 for _ in all_emails)
-            print(f"ℹ️ User {user_email} has {email_count} total emails in database")
+            for email_doc in matching_emails:
+                email_ref = emails_ref.document(email_doc.id)
+                email_ref.update({
+                    'view_status': True,
+                    'last_viewed': firestore.SERVER_TIMESTAMP,
+                    'view_count': firestore.Increment(1)
+                })
+                print(f"✅ Updated email view_status for tracker {tracker_id}")
+                break
+            else:
+                print(f"⚠️ Email not found for tracker {tracker_id}, but tracking logged")
+        except Exception as email_update_error:
+            print(f"⚠️ Could not update email status: {str(email_update_error)}, but tracking logged")
 
         # Return a 1x1 transparent pixel
         pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
-
         from fastapi.responses import Response
         return Response(content=pixel_data, media_type="image/png")
 
     except Exception as e:
-        print(f"❌ Error tracking email view for tracker {tracker_id}: {str(e)}")
-        # Still return pixel even on error to not break email tracking
+        print(f"❌ Error in tracking: {str(e)}")
+        # Always return pixel to not break email tracking
         pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
         from fastapi.responses import Response
         return Response(content=pixel_data, media_type="image/png")
