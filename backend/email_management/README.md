@@ -523,7 +523,7 @@ Returns a 1x1 transparent PNG pixel image.
 - Queries the specific user's email collection for efficient lookup
 - Always returns pixel image regardless of success/failure
 
-**Note:** Tracking pixels are NOT embedded in sent emails to prevent auto-triggering. Tracking occurs when users view emails in the application frontend.
+**Note:** Tracking pixels are embedded in sent emails for open tracking. The endpoint prevents false positives by only updating view_status when accessed from legitimate email clients.
 
 **Tracking Data Stored:**
 ```json

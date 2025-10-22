@@ -544,8 +544,11 @@ def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[L
 
     formatted_body = format_email_body(body)
 
-    # Note: Tracking pixel is NOT added here to prevent auto-triggering
-    # The tracker_id is stored in email data and tracking happens via frontend
+    # Add tracking pixel if tracker_id is provided
+    if tracker_id:
+        from urllib.parse import quote
+        tracking_pixel = f'<img src="https://superspidey-email-management.onrender.com/track-email-view/{tracker_id}?user_email={quote(sender)}" width="1" height="1" style="display:none;" alt="" />'
+        formatted_body = formatted_body + tracking_pixel
 
     # Build email headers
     headers = [
