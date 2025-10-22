@@ -378,6 +378,10 @@ class UpdateDraftRequest(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
 
+class DeleteDraftRequest(BaseModel):
+    user_email: str
+    draft_id: str
+
 class FetchEmailsRequest(BaseModel):
     user_email: str
     page: int = 1  # Page number starting from 1
@@ -1622,6 +1626,27 @@ async def update_draft(request: UpdateDraftRequest):
 
     except Exception as e:
         print(f"Unexpected error in update-draft: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.delete("/delete-draft")
+async def delete_draft(request: DeleteDraftRequest):
+    """Delete an email draft for a user from Firestore"""
+    try:
+        # Delete draft directly from the drafts collection
+        draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(request.draft_id)
+
+        # Delete the document
+        draft_ref.delete()
+
+        return {
+            "user_email": request.user_email,
+            "draft_id": request.draft_id,
+            "success": True,
+            "message": "Draft deleted successfully"
+        }
+
+    except Exception as e:
+        print(f"Unexpected error in delete-draft: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/fetch-emails")

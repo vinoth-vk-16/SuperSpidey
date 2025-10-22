@@ -25,6 +25,8 @@ export default function ComposePage() {
     body: ''
   });
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -36,6 +38,7 @@ export default function ComposePage() {
     
     if (draftId && user?.email) {
       setCurrentDraftId(draftId);
+      setIsLoadingDraft(true);
       // Fetch the draft
       fetch('https://superspidey-email-management.onrender.com/fetch-drafts', {
         method: 'POST',
@@ -59,10 +62,86 @@ export default function ComposePage() {
               body: draft.body || '',
             });
           }
+          setIsLoadingDraft(false);
         })
-        .catch(err => console.error('Failed to load draft:', err));
+        .catch(err => {
+          console.error('Failed to load draft:', err);
+          setIsLoadingDraft(false);
+        });
     }
   }, [user?.email]);
+
+  // Auto-save draft with debouncing (save after 2 seconds of inactivity)
+  useEffect(() => {
+    // Don't save if still loading existing draft
+    if (isLoadingDraft) return;
+    
+    // Don't save if no content
+    if (!user?.email || (!emailData.to && !emailData.subject && !emailData.body)) {
+      return;
+    }
+
+    // Clear previous timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Set new timeout
+    saveTimeoutRef.current = setTimeout(() => {
+      const saveDraft = async () => {
+        try {
+          if (currentDraftId) {
+            // Update existing draft
+            await fetch('https://superspidey-email-management.onrender.com/update-draft', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                user_email: user.email,
+                draft_id: currentDraftId,
+                to_email: emailData.to.trim() || undefined,
+                subject: emailData.subject.trim() || undefined,
+                body: emailData.body.trim() || undefined,
+              }),
+            });
+            console.log('Draft updated:', currentDraftId);
+          } else {
+            // Create new draft
+            const response = await fetch('https://superspidey-email-management.onrender.com/create-draft', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                user_email: user.email,
+                to_email: emailData.to.trim() || undefined,
+                subject: emailData.subject.trim() || undefined,
+                body: emailData.body.trim() || undefined,
+              }),
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              setCurrentDraftId(data.draft_id);
+              console.log('Draft created:', data.draft_id);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to save draft:', err);
+        }
+      };
+
+      saveDraft();
+    }, 2000); // Save after 2 seconds of inactivity
+
+    // Cleanup
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [emailData, user?.email, currentDraftId, isLoadingDraft]);
 
   const sendEmailMutation = useMutation({
     mutationFn: async (emailData: { to: string; subject: string; body: string }) => {
@@ -118,11 +197,30 @@ export default function ComposePage() {
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Email sent successfully!",
         description: "Your email has been sent and will appear in your inbox.",
       });
+
+      // Delete the draft if it exists
+      if (currentDraftId && user?.email) {
+        try {
+          await fetch('https://superspidey-email-management.onrender.com/delete-draft', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_email: user.email,
+              draft_id: currentDraftId,
+            }),
+          });
+          console.log('Draft deleted after sending:', currentDraftId);
+        } catch (err) {
+          console.error('Failed to delete draft:', err);
+        }
+      }
 
       // Reset form
       setEmailData({
@@ -132,9 +230,11 @@ export default function ComposePage() {
         subject: '',
         body: ''
       });
+      setCurrentDraftId(null);
 
       // Refetch emails to show the sent email
       queryClient.invalidateQueries({ queryKey: ['emails'] });
+      queryClient.invalidateQueries({ queryKey: ['drafts'] });
 
       // Go back to inbox
       setLocation('/');
@@ -210,28 +310,6 @@ export default function ComposePage() {
     }));
     setShowAI(false);
   };
-
-  // Auto-save draft when leaving the page
-  useEffect(() => {
-    return () => {
-      // Only save if there's content and user is authenticated
-      if (user?.email && (emailData.to || emailData.subject || emailData.body)) {
-        // Save draft asynchronously
-        fetch('https://superspidey-email-management.onrender.com/create-draft', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_email: user.email,
-            to_email: emailData.to.trim() || undefined,
-            subject: emailData.subject.trim() || undefined,
-            body: emailData.body.trim() || undefined,
-          }),
-        }).catch(err => console.error('Failed to save draft:', err));
-      }
-    };
-  }, [emailData, user?.email]);
 
   return (
     <div className="h-screen flex bg-background overflow-hidden">

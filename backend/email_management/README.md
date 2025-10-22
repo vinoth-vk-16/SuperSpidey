@@ -250,6 +250,39 @@ Update an existing email draft for a user in Firestore.
 **Error Responses:**
 - `500`: Failed to update draft
 
+### DELETE /delete-draft
+Delete an email draft for a user from Firestore.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "draft_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Parameters:**
+- `user_email`: User's email address (required)
+- `draft_id`: Unique identifier for the draft to delete (required)
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "draft_id": "550e8400-e29b-41d4-a716-446655440000",
+  "success": true,
+  "message": "Draft deleted successfully"
+}
+```
+
+**Behavior:**
+- Permanently deletes the draft document from Firestore
+- No recovery possible after deletion
+- Safe to call on non-existent drafts (no error)
+
+**Error Responses:**
+- `500`: Failed to delete draft
+
 ### POST /fetch-emails
 Fetch paginated email threads for a user from Firestore, automatically refreshing from Gmail first to ensure latest data.
 
