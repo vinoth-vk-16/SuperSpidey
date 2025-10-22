@@ -58,7 +58,7 @@ Main agent interaction endpoint.
 }
 ```
 
-**Response**:
+**Response for Email Creation**:
 ```json
 {
   "success": true,
@@ -70,7 +70,19 @@ Main agent interaction endpoint.
 }
 ```
 
-**Or when more information is needed**:
+**Response for Direct Questions/Advice**:
+```json
+{
+  "success": true,
+  "message": "Here are some tips for writing effective email subject lines...",
+  "action_taken": "provide_guidance",
+  "drafts_created": null,
+  "draft_ids": null,
+  "questions": null
+}
+```
+
+**Response when more information is needed**:
 ```json
 {
   "success": true,
