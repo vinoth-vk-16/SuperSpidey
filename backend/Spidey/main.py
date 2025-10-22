@@ -151,18 +151,26 @@ Remember: Focus on creating high-quality email drafts that get responses and dri
 def process_with_gemini(gemini_api_key: str, user_input: str, user_email: str, previous_convo: Optional[str] = None) -> Dict[str, Any]:
     """Process user input with Gemini and execute appropriate tools"""
     try:
+        # Validate API key
+        if not gemini_api_key or not gemini_api_key.startswith("AIza"):
+            return {
+                "action_taken": "error",
+                "gemini_response": "Invalid API key format. Please provide a valid Gemini API key starting with 'AIza'.",
+                "suggestions": ["Check your API key format", "Ensure you have a valid Gemini API key"]
+            }
+
         # Configure Gemini
         genai.configure(api_key=gemini_api_key)
         
-        # Try multiple models with fallback (primary and fallback)
+        # Try multiple models with fallback (more robust approach)
         model_names = [
-            'gemini-2.5-flash',      # Primary model - Gemini 2.5 Flash
-            'gemini-2.0-flash-lite'  # Fallback model - Gemini 2.0 Flash-Lite
+            'gemini-2.0-flash',      # More stable model first
+            'gemini-2.5-flash-lite'       # Pro model as backup
         ]
-        
+
         model = None
         last_error = None
-        
+
         for model_name in model_names:
             try:
                 model = genai.GenerativeModel(model_name)
@@ -172,12 +180,12 @@ def process_with_gemini(gemini_api_key: str, user_input: str, user_email: str, p
                 last_error = e
                 print(f"⚠️ Model {model_name} not available: {str(e)}")
                 continue
-        
+
         if model is None:
             return {
                 "action_taken": "error",
-                "gemini_response": f"No Gemini models available. Last error: {str(last_error)}",
-                "suggestions": ["Check your API key", "Try again later"]
+                "gemini_response": f"Unable to access Gemini API. This could be due to: 1) Invalid API key 2) API quota exceeded 3) Service temporarily unavailable. Last error: {str(last_error)}",
+                "suggestions": ["Verify your Gemini API key is valid and has quota", "Check Google Cloud Console for API restrictions", "Try again in a few minutes"]
             }
         
         # Enhanced prompt for Spidey
@@ -239,8 +247,29 @@ If user asks to create emails but you need more specific information, respond ON
 """
         
         # Get response from Gemini
-        response = model.generate_content(enhanced_prompt)
-        response_text = response.text.strip()
+        try:
+            response = model.generate_content(enhanced_prompt)
+            response_text = response.text.strip()
+        except Exception as api_error:
+            error_str = str(api_error)
+            if "API_KEY_INVALID" in error_str or "API key not valid" in error_str:
+                return {
+                    "action_taken": "error",
+                    "gemini_response": f"Invalid Gemini API key. Please verify: 1) API key is correct 2) Gemini API is enabled in Google Cloud Console 3) Billing is enabled for your project. Error: {error_str}",
+                    "suggestions": ["Check your API key in Google AI Studio", "Enable Gemini API in Google Cloud Console", "Verify billing is set up for your Google Cloud project"]
+                }
+            elif "quota" in error_str.lower() or "rate limit" in error_str.lower():
+                return {
+                    "action_taken": "error",
+                    "gemini_response": f"Gemini API quota exceeded. Please wait before making more requests. Error: {error_str}",
+                    "suggestions": ["Wait a few minutes before trying again", "Check your API usage limits in Google Cloud Console"]
+                }
+            else:
+                return {
+                    "action_taken": "error",
+                    "gemini_response": f"Gemini API error: {error_str}",
+                    "suggestions": ["Try again in a few minutes", "Check Google Cloud Console for service status"]
+                }
         
         # Clean up response to extract JSON
         if response_text.startswith('```json'):

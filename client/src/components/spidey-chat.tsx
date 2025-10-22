@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Mail, Lightbulb } from 'lucide-react';
+import { Mail, Lightbulb } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
@@ -265,7 +265,11 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
                   </div>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-2xl px-4 py-3">
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
                 </div>
               </div>
             )}
@@ -291,7 +295,11 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
             className="absolute top-1/2 -translate-y-1/2 right-3 h-9 w-9 rounded-full border-2 border-primary bg-transparent hover:bg-primary/10 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <div className="flex items-center space-x-0.5">
+                <div className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
             ) : (
               <SendIcon className="w-4 h-4" />
             )}
