@@ -1,10 +1,27 @@
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
-import { Mail, Settings, LogOut, Inbox, SquarePen, FileText } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+
+// Custom SVG Icon Components
+const InboxIcon = ({ className }: { className?: string }) => (
+  <img src="/inbox.svg" alt="Inbox" className={className} />
+);
+
+const DraftsIcon = ({ className }: { className?: string }) => (
+  <img src="/drafts.svg" alt="Drafts" className={className} />
+);
+
+const ComposeIcon = ({ className }: { className?: string }) => (
+  <img src="/compose.svg" alt="Compose" className={className} />
+);
+
+const SettingsIcon = ({ className }: { className?: string }) => (
+  <img src="/settings.svg" alt="Settings" className={className} />
+);
 
 interface NavLink {
   label: string;
@@ -26,13 +43,13 @@ export default function Sidebar() {
   };
 
   const navItems: NavLink[] = [
-    { icon: Mail, label: 'Inbox', path: '/', count: null },
-    { icon: FileText, label: 'Drafts', path: '/drafts', count: null },
-    { icon: SquarePen, label: 'Compose', path: '/compose', count: null },
+    { icon: InboxIcon, label: 'Inbox', path: '/', count: null },
+    { icon: DraftsIcon, label: 'Drafts', path: '/drafts', count: null },
+    { icon: ComposeIcon, label: 'Compose', path: '/compose', count: null },
   ];
 
   const bottomNavItems: NavLink[] = [
-    { icon: Settings, label: 'Settings', path: '/settings', count: null },
+    { icon: SettingsIcon, label: 'Settings', path: '/settings', count: null },
   ];
 
   return (
@@ -137,7 +154,7 @@ interface SidebarLinkProps {
 
 function SidebarLink({ link, isActive, onClick }: SidebarLinkProps) {
   const Icon = link.icon;
-  
+
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
@@ -150,7 +167,7 @@ function SidebarLink({ link, isActive, onClick }: SidebarLinkProps) {
               : 'text-sidebar-foreground hover:text-foreground hover:bg-sidebar-accent'
           )}
         >
-          <Icon className="w-4 h-4" strokeWidth={2} />
+          <Icon className="w-4 h-4" />
           {link.count !== null && link.count !== undefined && link.count > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-semibold rounded-full flex items-center justify-center shadow-sm">
               {link.count > 99 ? '99+' : link.count}

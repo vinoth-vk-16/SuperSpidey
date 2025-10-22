@@ -207,7 +207,7 @@ export default function ComposePage() {
       if (currentDraftId && user?.email) {
         try {
           await fetch('https://superspidey-email-management.onrender.com/delete-draft', {
-            method: 'POST',
+            method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
             },
@@ -310,6 +310,56 @@ export default function ComposePage() {
     }));
     setShowAI(false);
   };
+
+  // Show loading shimmer while loading draft
+  if (isLoadingDraft) {
+    return (
+      <div className="h-screen flex bg-background overflow-hidden">
+        <Sidebar />
+        
+        {/* Empty Section */}
+        <div className="w-64 bg-background flex-shrink-0"></div>
+
+        {/* Main Content Box with 8px margin */}
+        <div className="flex-1 p-2">
+          <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-auto custom-scrollbar">
+              <div className="max-w-4xl mx-auto py-6 px-6">
+                {/* Title Shimmer */}
+                <div className="h-7 w-40 bg-muted rounded animate-pulse mb-6"></div>
+
+                {/* Compose Box Shimmer */}
+                <div className="border-l-4 border-primary rounded-l-lg bg-muted/40 overflow-hidden">
+                  <div className="p-5 space-y-4">
+                    {/* To Field Shimmer */}
+                    <div className="flex items-center space-x-3 pb-3 border-b border-border/50">
+                      <div className="h-4 w-12 bg-muted rounded animate-pulse"></div>
+                      <div className="flex-1 h-5 bg-muted rounded animate-pulse"></div>
+                    </div>
+
+                    {/* Subject Field Shimmer */}
+                    <div className="flex items-center space-x-3 py-3 border-b border-border/50">
+                      <div className="h-4 w-12 bg-muted rounded animate-pulse"></div>
+                      <div className="flex-1 h-5 bg-muted rounded animate-pulse"></div>
+                    </div>
+
+                    {/* Body Shimmer */}
+                    <div className="pt-4 space-y-3">
+                      <div className="h-4 w-full bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 w-full bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 w-3/4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 w-full bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 w-5/6 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex bg-background overflow-hidden">

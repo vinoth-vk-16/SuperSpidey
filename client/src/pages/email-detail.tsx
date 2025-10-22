@@ -489,11 +489,11 @@ export default function EmailDetailPage() {
                             {isMe && msg.view_status !== undefined && (
                               <div className="flex items-center gap-1.5" title={msg.view_status ? "Viewed" : "Not viewed yet"}>
                                 <img 
-                                  src={msg.view_status ? "/viewed.png" : "/in-progress.png"} 
+                                  src={msg.view_status ? "/viewed.svg" : "/in-progress.svg"} 
                                   alt={msg.view_status ? "Viewed" : "Not viewed"}
                                   className="w-4 h-4"
                                 />
-                                <span className={`text-xs font-medium whitespace-nowrap ${msg.view_status ? '' : 'text-yellow-600'}`} style={msg.view_status ? { color: '#94D82D' } : undefined}>
+                                <span className={`text-xs font-medium whitespace-nowrap ${msg.view_status ? '' : 'text-yellow-600'}`} style={msg.view_status ? { color: '#78A75A' } : undefined}>
                                   {msg.view_status ? 'Viewed' : 'Not viewed'}
                                 </span>
                               </div>

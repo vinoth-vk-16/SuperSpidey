@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter';
-import { Search, Trash2, Edit, RotateCcw } from 'lucide-react';
+import { Search, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
@@ -48,6 +48,8 @@ export default function DraftsPage() {
       return response.json();
     },
     enabled: !!user?.email,
+    refetchInterval: 3000, // Refetch every 3 seconds in background
+    refetchIntervalInBackground: true, // Continue refetching even when tab is not focused
   });
 
   const deleteDraftMutation = useMutation({
@@ -57,7 +59,7 @@ export default function DraftsPage() {
       }
       
       const response = await fetch('https://superspidey-email-management.onrender.com/delete-draft', {
-        method: 'POST',
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -77,7 +79,7 @@ export default function DraftsPage() {
         title: "Draft deleted",
         description: "The draft has been deleted successfully.",
       });
-      refetch();
+      queryClient.invalidateQueries({ queryKey: ['drafts'] });
     },
     onError: (error: Error) => {
       toast({
@@ -210,40 +212,55 @@ export default function DraftsPage() {
               <div className="max-w-5xl mx-auto">
                 {filteredDrafts.map((draft) => (
                   <div key={draft.draft_id}>
-                    <div className="email-item px-6 py-3 cursor-pointer group">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 mb-1">
-                            <span className="text-xs font-medium text-muted-foreground">
-                              To: {draft.to_email || '(No recipient)'}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(draft.updated_at), { addSuffix: true })}
-                            </span>
-                          </div>
-                          <div className="text-sm font-medium text-foreground mb-1">
-                            {draft.subject || '(No subject)'}
-                          </div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {draft.body || '(No content)'}
-                          </div>
+                    <div 
+                      className="email-item px-6 py-2.5 cursor-pointer group"
+                      onClick={() => handleEditDraft(draft)}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        {/* Recipient - compact width */}
+                        <div className="flex-shrink-0 w-36">
+                          <span className="text-xs text-muted-foreground truncate block">
+                            To: {draft.to_email || '(No recipient)'}
+                          </span>
                         </div>
 
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Subject - compact width */}
+                        <div className="flex-shrink-0 w-48">
+                          <span className="text-xs font-medium text-foreground truncate block">
+                            {draft.subject || '(No subject)'}
+                          </span>
+                        </div>
+
+                        {/* Separator */}
+                        <span className="text-xs text-muted-foreground flex-shrink-0 px-1">—</span>
+
+                        {/* Body snippet - takes remaining space */}
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <p className="text-xs text-muted-foreground truncate">
+                            {draft.body || '(No content)'}
+                          </p>
+                        </div>
+
+                        {/* Timestamp - compact, more space from right */}
+                        <div className="flex-shrink-0 w-20 text-right ml-4">
+                          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                            {formatDistanceToNow(new Date(draft.updated_at), { addSuffix: true }).replace('about ', '').replace(' ago', '')}
+                          </span>
+                        </div>
+
+                        {/* Delete button - visible on hover */}
+                        <div className={`flex items-center flex-shrink-0 ml-3 ${
+                          deleteDraftMutation.isPending ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        } transition-opacity`}>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleEditDraft(draft)}
-                            className="h-8 w-8 rounded hover:bg-muted"
-                            title="Edit draft"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteDraftMutation.mutate(draft.draft_id)}
-                            className="h-8 w-8 rounded hover:bg-destructive/20 hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteDraftMutation.mutate(draft.draft_id);
+                            }}
+                            disabled={deleteDraftMutation.isPending}
+                            className="h-7 w-7 rounded hover:bg-destructive/20 hover:text-destructive"
                             title="Delete draft"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
