@@ -266,7 +266,8 @@ Improve or modify email content using Gemini AI with different actions.
 **Response:**
 ```json
 {
-  "improved_text": "Improved email content..."
+  "subject": "",
+  "body": "Improved email content..."
 }
 ```
 

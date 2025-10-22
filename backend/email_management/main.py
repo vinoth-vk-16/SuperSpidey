@@ -291,7 +291,8 @@ class ImproveEmailRequest(BaseModel):
     custom_prompt: Optional[str] = None
 
 class ImproveEmailResponse(BaseModel):
-    improved_text: str
+    subject: str
+    body: str
 
 class StartWatchRequest(BaseModel):
     user_email: str
@@ -1220,7 +1221,7 @@ async def improve_email_endpoint(request: ImproveEmailRequest):
             request.api_key,
             request.custom_prompt
         )
-        return ImproveEmailResponse(improved_text=improved_text)
+        return ImproveEmailResponse(subject="", body=improved_text)
     except HTTPException:
         raise
     except Exception as e:

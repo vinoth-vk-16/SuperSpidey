@@ -124,8 +124,6 @@ export default function ComposePage() {
     setShowAI(false);
   };
 
-  const aiOverlayRef = useRef<any>(null);
-
   return (
     <div className="h-screen flex bg-background overflow-hidden">
       <Sidebar />
@@ -262,15 +260,19 @@ export default function ComposePage() {
       {showAI && (
         <div
           className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              aiOverlayRef.current?.handleOutsideClick?.();
+          onMouseDown={(e) => {
+            // Check if the click is on the backdrop itself (not bubbled from children)
+            const target = e.target as HTMLElement;
+            if (target.classList.contains('modal-overlay')) {
+              setShowAI(false);
             }
           }}
         >
-          <div className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div 
+            className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <AIOverlay
-              ref={aiOverlayRef}
               isOpen={showAI}
               onClose={() => setShowAI(false)}
               onDraftGenerated={handleDraftGenerated}

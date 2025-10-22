@@ -44,8 +44,6 @@ export default function EmailDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAI, setShowAI] = useState(false);
-  const aiOverlayRef = useRef<any>(null);
-
   // AI keyboard shortcut - only when replying
   useKeyboardShortcut(['ctrl', 'u'], () => {
     if (isReplying) setShowAI(true);
@@ -516,16 +514,20 @@ export default function EmailDetailPage() {
     {showAI && isReplying && (
       <div
         className="fixed inset-0 modal-overlay z-50 flex items-center justify-center p-4"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            aiOverlayRef.current?.handleOutsideClick?.();
+        onMouseDown={(e) => {
+          // Check if the click is on the backdrop itself (not bubbled from children)
+          const target = e.target as HTMLElement;
+          if (target.classList.contains('modal-overlay')) {
+            setShowAI(false);
           }
         }}
       >
-        <div className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200">
-          <AIOverlay
-            ref={aiOverlayRef}
-            isOpen={showAI}
+        <div 
+          className="w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200"
+          onMouseDown={(e) => e.stopPropagation()}
+          >
+            <AIOverlay
+              isOpen={showAI}
             onClose={() => setShowAI(false)}
             onDraftGenerated={(draft) => {
               setReplyText(draft);

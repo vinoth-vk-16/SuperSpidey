@@ -9,14 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -42,7 +34,6 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
   const [generatedContent, setGeneratedContent] = useState('');
   const [generatedSubject, setGeneratedSubject] = useState('');
   const [editPrompt, setEditPrompt] = useState('');
-  const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { toast } = useToast();
   
@@ -219,33 +210,9 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
     }
   };
 
-  const handleDiscardConfirm = () => {
-    setShowDiscardModal(false);
-    if (onDiscardGenerated) {
-      onDiscardGenerated(); // Restore previous content
-    }
-    resetOverlay();
-    onClose();
-  };
-
-  const handleDiscardCancel = () => {
-    setShowDiscardModal(false);
-  };
-
   const handleOutsideClick = () => {
-    // Check if there's any content worth preserving (with null checks)
-    const hasContent = (prompt && prompt.trim()) || 
-                       (generatedContent && generatedContent.trim()) || 
-                       (generatedSubject && generatedSubject.trim()) || 
-                       (editPrompt && editPrompt.trim());
-    
-    if (hasContent) {
-      // Show discard modal if there's content
-      setShowDiscardModal(true);
-    } else {
-      // Close directly if no content
-      onClose();
-    }
+    // Close directly without showing discard modal
+    onClose();
   };
 
 
@@ -356,7 +323,6 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
       <div 
         className="border-2 border-blue-400 rounded-lg bg-card transition-all duration-200 ease-in-out relative" 
         data-testid="ai-inline-dialog"
-        onClick={(e) => e.stopPropagation()} // Prevent clicks from bubbling to backdrop
       >
         <div className="p-2">
           <div className="text-sm text-muted-foreground flex items-center">
@@ -375,7 +341,6 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
         <div 
           className="border-2 border-blue-400 rounded-lg bg-card transition-all duration-200 ease-in-out relative" 
           data-testid="ai-inline-dialog"
-          onClick={(e) => e.stopPropagation()} // Prevent clicks from bubbling to backdrop
         >
           <div className="p-3 space-y-3">
           {/* Generated content display */}
@@ -435,10 +400,8 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
                     align="start"
                     onInteractOutside={(e) => {
                       e.preventDefault();
-                      // When user clicks outside dropdown with AI response, show discard modal
-                      if (generatedContent.trim()) {
-                        setShowDiscardModal(true);
-                      }
+                      // Close the dropdown when clicking outside
+                      setDropdownOpen(false);
                     }}
                   >
                     <div
@@ -490,26 +453,6 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
           )}
         </div>
         </div>
-        
-        {/* Discard Modal */}
-        <Dialog open={showDiscardModal} onOpenChange={setShowDiscardModal}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Discard AI Response</DialogTitle>
-              <DialogDescription>
-                Do you want to discard the AI's response? This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={handleDiscardCancel} data-testid="button-discard-cancel">
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDiscardConfirm} data-testid="button-discard-confirm">
-                Discard
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </>
     );
   }
@@ -519,7 +462,6 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
     <div 
       className="border-2 border-blue-400 rounded-lg bg-card transition-all duration-200 ease-in-out relative" 
       data-testid="ai-inline-dialog"
-      onClick={(e) => e.stopPropagation()} // Prevent clicks from bubbling to backdrop
     >
       <div className="p-3">
         <div className="text-sm font-medium text-foreground mb-2">
