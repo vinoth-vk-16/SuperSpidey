@@ -1,12 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { z } from "zod";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import session from "express-session";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { google } from "googleapis";
 
 // Configure Passport Google OAuth Strategy
 let googleConfig: any = {};
@@ -239,118 +237,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(401).json({ error: 'Authentication required' });
   };
 
-  // Gmail API endpoints
-  app.post('/api/gmail/send', requireAuth, async (req, res) => {
-    try {
-      const { to, subject, body } = z.object({
-        to: z.string().email(),
-        subject: z.string().min(1),
-        body: z.string().min(1)
-      }).parse(req.body);
-
-      const user = req.user as any;
-      const oauth2Client = new google.auth.OAuth2();
-      oauth2Client.setCredentials({
-        access_token: user.accessToken,
-        refresh_token: user.refreshToken
-      });
-
-      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-
-      // Convert plain text to HTML with proper formatting
-      const formatEmailBody = (text: string): string => {
-        // Split by double newlines for paragraphs, single newlines for line breaks
-        const htmlBody = text
-          .split('\n\n') // Split paragraphs
-          .map(paragraph =>
-            paragraph
-              .split('\n') // Split lines within paragraph
-              .map(line => line.trim())
-              .filter(line => line.length > 0)
-              .join('<br>')
-          )
-          .filter(paragraph => paragraph.length > 0)
-          .map(paragraph => `<p style="margin: 0 0 1em 0; line-height: 1.5;">${paragraph}</p>`)
-          .join('');
-
-        // Wrap in a styled container
-        return `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
-            ${htmlBody}
-          </div>
-        `.trim();
-      };
-
-      const formattedBody = formatEmailBody(body);
-      
-      // Generate a temporary message ID for tracking
-      const tempMessageId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Add tracking pixel to the email body
-      const trackingPixel = `<img src="https://superspidey-email-management.onrender.com/track-email-view/${tempMessageId}?user_email=${encodeURIComponent(user.email)}" width="1" height="1" style="display:none;" alt="" />`;
-      const bodyWithTracking = formattedBody + trackingPixel;
-
-      // Create email with custom header
-      const email = [
-        'Content-Type: text/html; charset=utf-8',
-        'MIME-Version: 1.0',
-        `To: ${to}`,
-        `From: ${user.email}`,
-        `Subject: ${subject}`,
-        'X-MyApp-ID: ContactSpidey',
-        '',
-        bodyWithTracking
-      ].join('\r\n');
-
-      console.log('Sending email with headers:', {
-        to,
-        from: user.email,
-        subject,
-        customHeader: 'X-MyApp-ID: ContactSpidey',
-        originalBody: body.substring(0, 100) + (body.length > 100 ? '...' : ''),
-        formattedBody: formattedBody.substring(0, 100) + (formattedBody.length > 100 ? '...' : '')
-      });
-
-      const encodedEmail = Buffer.from(email).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
-
-      const result = await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
-          raw: encodedEmail
-        }
-      });
-
-      console.log('Email sent successfully with ID:', result.data.id);
-
-      // Let's also fetch the message to verify headers
-      try {
-        const sentMessage = await gmail.users.messages.get({
-          userId: 'me',
-          id: result.data.id!,
-          format: 'metadata',
-          metadataHeaders: ['X-MyApp-ID', 'Subject', 'From', 'To']
-        });
-
-        const headers = sentMessage.data.payload?.headers || [];
-        console.log('Sent message headers:', headers.map(h => `${h.name}: ${h.value}`));
-      } catch (error) {
-        console.error('Error verifying sent message headers:', error);
-      }
-
-      res.json({ messageId: result.data.id, success: true });
-    } catch (error: any) {
-      console.error('Error sending email:', error);
-      res.status(500).json({ error: 'Failed to send email' });
-    }
-  });
-
-  // Removed: Proxy to external email management service
-  // Frontend now calls https://superspidey-email-management.onrender.com/fetch-emails directly
+  // All email sending is now handled by the external email management service
+  // Frontend calls https://superspidey-email-management.onrender.com/send-email directly
   
-  // Removed: Direct Gmail API message fetching
-  // Now using external email management service
-  
-  // Removed: AI endpoints - frontend now calls external service directly
+  // Removed endpoints (now using external services):
+  // - /api/gmail/send -> https://superspidey-email-management.onrender.com/send-email
+  // - /api/gmail/messages -> https://superspidey-email-management.onrender.com/fetch-emails
   // - /api/generate-draft -> https://superspidey-email-management.onrender.com/generate-email
   // - /api/improve-email -> https://superspidey-email-management.onrender.com/improve-email
 

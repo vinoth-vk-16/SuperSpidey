@@ -480,7 +480,7 @@ def refresh_access_token(refresh_token: str):
     # For now, we'll let the Google API client handle refresh automatically
     pass
 
-def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[List[str]] = None, bcc: Optional[List[str]] = None, thread_id: Optional[str] = None):
+def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[List[str]] = None, bcc: Optional[List[str]] = None, thread_id: Optional[str] = None, tracker_id: Optional[str] = None):
     """Create a message for an email"""
     # Convert plain text to HTML with proper formatting (same as routes.ts)
     def format_email_body(text: str):
@@ -512,6 +512,12 @@ def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[L
         '''.strip()
 
     formatted_body = format_email_body(body)
+    
+    # Add tracking pixel if tracker_id is provided
+    if tracker_id:
+        from urllib.parse import quote
+        tracking_pixel = f'<img src="https://superspidey-email-management.onrender.com/track-email-view/{tracker_id}?user_email={quote(sender)}" width="1" height="1" style="display:none;" alt="" />'
+        formatted_body = formatted_body + tracking_pixel
 
     # Build email headers
     headers = [
@@ -1183,7 +1189,8 @@ async def send_email(request: SendEmailRequest):
             body=request.body,
             cc=request.cc,
             bcc=request.bcc,
-            thread_id=request.thread_id
+            thread_id=request.thread_id,
+            tracker_id=request.tracker_id
         )
 
         # Send the email
