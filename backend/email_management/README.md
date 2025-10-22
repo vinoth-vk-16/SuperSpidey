@@ -413,6 +413,7 @@ Returns a 1x1 transparent PNG pixel image.
 - **Credential Updates**: Stores updated tokens back to Firestore after refresh
 - **Email Formatting**: Converts plain text to HTML with proper formatting
 - **Custom Headers**: Adds `X-MyApp-ID: ContactSpidey` header to track sent emails
+- **Email Parsing**: Properly decodes HTML entities, cleans email addresses (removes `<>` brackets), and removes reply formatting from received emails
 - **CC/BCC Support**: Optional carbon copy and blind carbon copy recipients
 - **Database Storage**: Automatically stores sent emails in Firestore with full metadata
 

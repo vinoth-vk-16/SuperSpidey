@@ -17,6 +17,8 @@ import re
 import time
 from dotenv import load_dotenv
 import google.generativeai as genai
+import html
+from email.utils import parseaddr
 
 # Load environment variables from .env file
 load_dotenv()
@@ -40,6 +42,47 @@ if not vite_google_cred:
 
 google_credentials = json.loads(vite_google_cred)
 google_config = google_credentials.get('web', {})
+
+def clean_email_address(email_str):
+    """Clean email address by removing angle brackets and extra formatting"""
+    if not email_str:
+        return email_str
+
+    # Parse the email address to extract just the email part
+    parsed_name, parsed_email = parseaddr(email_str)
+
+    # If we got a clean email, return it
+    if parsed_email and '@' in parsed_email:
+        return parsed_email
+
+    # Otherwise, try to extract from angle brackets
+    angle_bracket_match = re.search(r'<([^>]+)>', email_str)
+    if angle_bracket_match:
+        return angle_bracket_match.group(1).strip()
+
+    # If no angle brackets, return as-is but cleaned
+    return email_str.strip()
+
+def clean_email_body(body_text):
+    """Clean email body by decoding HTML entities and removing reply formatting"""
+    if not body_text:
+        return body_text
+
+    # Decode HTML entities
+    cleaned = html.unescape(body_text)
+
+    # Remove common email reply patterns
+    # Remove "On [date] [person] wrote:" patterns
+    cleaned = re.sub(r'On\s+[^>]*wrote:\s*', '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
+
+    # Remove angle bracket email formatting in reply lines
+    cleaned = re.sub(r'<([^>]+@[^>]+)>', r'\1', cleaned)
+
+    # Clean up multiple spaces and normalize line breaks
+    cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)  # Multiple blank lines to double
+    cleaned = re.sub(r'[ \t]+', ' ', cleaned)  # Multiple spaces to single
+
+    return cleaned.strip()
 
 print("Firebase service account loaded successfully")
 print("Google OAuth Config loaded:", {
@@ -800,13 +843,13 @@ def refresh_user_emails_from_gmail(user_email: str):
                     if name == 'subject':
                         subject = value
                     elif name == 'from':
-                        from_addr = value
+                        from_addr = clean_email_address(value)
                     elif name == 'to':
-                        to_addr = [email.strip() for email in value.split(',')]
+                        to_addr = [clean_email_address(email.strip()) for email in value.split(',') if email.strip()]
                     elif name == 'cc':
-                        cc_addr = [email.strip() for email in value.split(',')]
+                        cc_addr = [clean_email_address(email.strip()) for email in value.split(',') if email.strip()]
                     elif name == 'bcc':
-                        bcc_addr = [email.strip() for email in value.split(',')]
+                        bcc_addr = [clean_email_address(email.strip()) for email in value.split(',') if email.strip()]
                     elif name == 'date':
                         date = value
 
@@ -823,6 +866,9 @@ def refresh_user_emails_from_gmail(user_email: str):
                             body = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8')
                             break
 
+                # Clean the email body
+                body = clean_email_body(body)
+
                 # Create email data for Firestore
                 email_data = {
                     'messageId': message['id'],
@@ -831,13 +877,21 @@ def refresh_user_emails_from_gmail(user_email: str):
                     'to': to_addr,
                     'subject': subject,
                     'body': body,
-                    'snippet': msg_detail.get('snippet', ''),
+                    'snippet': clean_email_body(msg_detail.get('snippet', '')),
                     'headers': {
                         'X-MyApp-ID': 'ContactSpidey',
                         'Date': date,
                         'From': from_addr,
                         'To': ', '.join(to_addr),
                         'Subject': subject
+                    } if not cc_addr and not bcc_addr else {
+                        'X-MyApp-ID': 'ContactSpidey',
+                        'Date': date,
+                        'From': from_addr,
+                        'To': ', '.join(to_addr),
+                        'Subject': subject,
+                        'CC': ', '.join(cc_addr) if cc_addr else None,
+                        'BCC': ', '.join(bcc_addr) if bcc_addr else None
                     },
                     'labels': msg_detail.get('labelIds', []),
                     'isRead': 'UNREAD' not in msg_detail.get('labelIds', []),
