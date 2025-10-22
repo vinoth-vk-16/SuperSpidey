@@ -15,11 +15,16 @@ pip install -r requirements.txt
 
 ## Running the Service
 
+### Local Development
 ```bash
 python main.py
 ```
-
 The service will start on `http://localhost:8001`
+
+### Production
+The service is deployed on Render at: `https://superspidey-email-management.onrender.com`
+
+**API Base URL:** `https://superspidey-email-management.onrender.com`
 
 ## API Endpoints
 
@@ -56,7 +61,7 @@ When `thread_id` is provided, the email will be sent as a reply to the existing 
 - `500`: Failed to send email or other server errors
 
 ### POST /fetch-emails
-Fetch paginated email threads for a user from Firestore (not from Gmail).
+Fetch paginated email threads for a user from Firestore, automatically refreshing from Gmail first to ensure latest data.
 
 **Request Body:**
 ```json
@@ -106,6 +111,7 @@ Fetch paginated email threads for a user from Firestore (not from Gmail).
 - Pagination support (page 1, 2, 3, etc.)
 - Thread-level read status (true if all messages in thread are read)
 - Simplified email structure for frontend display
+- **Auto-refresh**: Automatically syncs with Gmail before fetching to ensure latest emails
 
 ### POST /refresh-emails
 Refresh emails for a user from Gmail API after the lastSyncTimestamp, filtering by custom header.
@@ -341,6 +347,29 @@ Update user information selectively. Only provided fields will be updated.
 - All fields are optional - only send what you want to update
 - At least one field must be provided
 - Returns the complete updated user information
+
+### GET /fetch-user-info/{user_email}
+Fetch user information including name, personal details, and writing style preferences.
+
+**URL Parameters:**
+- `user_email`: The email address of the user to fetch information for
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "user_name": "John Doe",
+  "user_info": "Software developer at TechCorp, specializes in AI applications",
+  "style": "professional, concise, technical",
+  "found": true,
+  "message": "User information retrieved successfully"
+}
+```
+
+**Notes:**
+- Returns empty strings for all fields if user information is not found
+- `found` field indicates whether user data exists
+- Useful for retrieving user preferences for AI email generation
 
 ### POST /mark-email-read
 Mark a specific email as read by updating the isRead status from false to true.

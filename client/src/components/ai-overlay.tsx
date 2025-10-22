@@ -62,43 +62,20 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
       return;
     }
     
-    setDisplayText('');
-    setIsTyping(true);
-    setShowResult(true); // Show result immediately so typing is visible
-    setGeneratedContent(text); // Set final content upfront
-    let index = 0;
-    
+    // Clear any ongoing typing animation
     if (typeIntervalRef.current) {
       clearInterval(typeIntervalRef.current);
+      typeIntervalRef.current = null;
     }
     
-    typeIntervalRef.current = setInterval(() => {
-      // Additional safety check inside interval
-      if (!text || typeof text !== 'string') {
-        console.warn('text became invalid during typing:', text);
-        if (typeIntervalRef.current) {
-          clearInterval(typeIntervalRef.current);
-          typeIntervalRef.current = null;
-        }
-        setIsTyping(false);
-        return;
-      }
-      
-      if (index < text.length) {
-        setDisplayText(text.substring(0, index + 1));
-        index++;
-      } else {
-        if (typeIntervalRef.current) {
-          clearInterval(typeIntervalRef.current);
-          typeIntervalRef.current = null;
-        }
-        setIsTyping(false);
-        // Auto-open dropdown after typing finishes
-        setTimeout(() => {
-          setDropdownOpen(true);
-        }, 200); // Small delay to let user see the complete text
-      }
-    }, 10); // Faster animation - from 30ms to 10ms
+    // Instantly display the text without animation
+    setGeneratedContent(text);
+    setDisplayText(text);
+    setShowResult(true);
+    setIsTyping(false);
+    
+    // Auto-open dropdown immediately
+    setDropdownOpen(true);
   };
 
   const generateMutation = useMutation({
@@ -237,6 +214,9 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
   const handleEditRequest = () => {
     if (!editPrompt.trim()) return;
     
+    // Close dropdown while processing
+    setDropdownOpen(false);
+    
     // Call mutation to improve the content
     improveEmailMutation.mutate({
       text: generatedContent,
@@ -283,10 +263,34 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
         throw new Error('Failed to improve email');
       }
       const data = await response.json();
-      return { improvedText: data.improved_text };
+      
+      // Parse the response - API returns {subject: "", body: "..."}
+      let improvedText = '';
+      if (data.body) {
+        // If there's a body field, use it
+        improvedText = data.body;
+      } else if (data.improved_text) {
+        // Fallback to improved_text if that's what's returned
+        improvedText = data.improved_text;
+      } else if (typeof data === 'string') {
+        // If the response is just a string
+        improvedText = data;
+      } else {
+        console.error('Unexpected improve-email response:', data);
+        throw new Error('Invalid response format');
+      }
+      
+      return { 
+        improvedText,
+        subject: data.subject || '' // Update subject if provided
+      };
     },
     onSuccess: (data) => {
-      typeText(data.improvedText); // Use typing animation for regenerated content too
+      // Update both content and subject if provided
+      if (data.subject) {
+        setGeneratedSubject(data.subject);
+      }
+      typeText(data.improvedText); // Use typing animation for regenerated content too (dropdown will auto-open after typing)
       setEditPrompt('');
     },
     onError: async (error: any) => {
@@ -426,21 +430,30 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
                       Retry
                     </div>
                     <div
-                      onClick={() => improveEmailMutation.mutate({ text: generatedContent, action: 'improve' })}
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        improveEmailMutation.mutate({ text: generatedContent, action: 'improve' });
+                      }}
                       className={`cursor-pointer px-2 py-1.5 text-sm text-foreground hover:text-blue-600 transition-colors ${improveEmailMutation.isPending ? 'opacity-50 pointer-events-none' : ''}`}
                       data-testid="button-improve"
                     >
                       Improve writing
                     </div>
                     <div
-                      onClick={() => improveEmailMutation.mutate({ text: generatedContent, action: 'shorten' })}
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        improveEmailMutation.mutate({ text: generatedContent, action: 'shorten' });
+                      }}
                       className={`cursor-pointer px-2 py-1.5 text-sm text-foreground hover:text-blue-600 transition-colors ${improveEmailMutation.isPending ? 'opacity-50 pointer-events-none' : ''}`}
                       data-testid="button-shorten"
                     >
                       Shorten
                     </div>
                     <div
-                      onClick={() => improveEmailMutation.mutate({ text: generatedContent, action: 'lengthen' })}
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        improveEmailMutation.mutate({ text: generatedContent, action: 'lengthen' });
+                      }}
                       className={`cursor-pointer px-2 py-1.5 text-sm text-foreground hover:text-blue-600 transition-colors ${improveEmailMutation.isPending ? 'opacity-50 pointer-events-none' : ''}`}
                       data-testid="button-lengthen"
                     >

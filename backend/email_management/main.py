@@ -412,6 +412,14 @@ class MarkEmailReadResponse(BaseModel):
     success: bool
     message: str
 
+class FetchUserInfoResponse(BaseModel):
+    user_email: str
+    user_name: str
+    user_info: str
+    style: str
+    found: bool
+    message: str
+
 class StartWatchRequest(BaseModel):
     user_email: str
     access_token: str
@@ -1251,13 +1259,22 @@ async def send_email(request: SendEmailRequest):
 
 @app.post("/fetch-emails")
 async def fetch_emails(request: FetchEmailsRequest):
-    """Fetch paginated emails for a user from Firestore"""
+    """Fetch paginated emails for a user from Firestore, automatically refreshing from Gmail first"""
     try:
         # Validate page number
         if request.page < 1:
             raise HTTPException(status_code=400, detail="Page number must be 1 or greater")
 
-        # Fetch emails
+        # Always refresh emails from Gmail first to ensure latest data
+        try:
+            print(f"🔄 Auto-refreshing emails for user: {request.user_email}")
+            refresh_result = refresh_user_emails_from_gmail(request.user_email)
+            print(f"✅ Auto-refresh completed: {refresh_result.message}")
+        except Exception as refresh_error:
+            print(f"⚠️ Auto-refresh failed for {request.user_email}: {str(refresh_error)}")
+            # Continue with fetching cached emails even if refresh fails
+
+        # Fetch emails from Firestore (now with latest data if refresh succeeded)
         result = fetch_user_emails(request.user_email, request.page, 30)
 
         return result
@@ -1437,6 +1454,40 @@ async def update_user_info(request: UpdateUserInfoRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update user info: {str(e)}")
+
+@app.get("/fetch-user-info/{user_email}")
+async def fetch_user_info(user_email: str):
+    """Fetch user information from Firestore"""
+    try:
+        # Reference to the user document
+        user_ref = db.collection('users').document(user_email)
+
+        # Get the user document
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            return FetchUserInfoResponse(
+                user_email=user_email,
+                user_name="",
+                user_info="",
+                style="",
+                found=False,
+                message="User information not found"
+            )
+
+        user_data = user_doc.to_dict()
+
+        return FetchUserInfoResponse(
+            user_email=user_email,
+            user_name=user_data.get('user_name', ''),
+            user_info=user_data.get('user_info', ''),
+            style=user_data.get('style', ''),
+            found=True,
+            message="User information retrieved successfully"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch user info: {str(e)}")
 
 @app.get("/track-email-view/{message_id}")
 async def track_email_view(message_id: str, request: Request, user_email: Optional[str] = None):
