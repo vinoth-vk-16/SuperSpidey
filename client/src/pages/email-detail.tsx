@@ -493,12 +493,12 @@ export default function EmailDetailPage() {
                                   alt={msg.view_status ? "Viewed" : "Not viewed"}
                                   className="w-4 h-4"
                                 />
-                                <span className={`text-xs font-medium whitespace-nowrap ${msg.view_status ? 'text-green-600' : 'text-yellow-600'}`}>
+                                <span className={`text-xs font-medium whitespace-nowrap ${msg.view_status ? '' : 'text-yellow-600'}`} style={msg.view_status ? { color: '#94D82D' } : undefined}>
                                   {msg.view_status ? 'Viewed' : 'Not viewed'}
                                 </span>
                               </div>
                             )}
-                          </div>
+          </div>
         </div>
 
                         {/* Message Body */}
@@ -571,16 +571,16 @@ export default function EmailDetailPage() {
                                   
                                   const payload = {
                                     user_email: user.email,
+                                    thread_id: currentThread?.threadId || currentMessage.threadId,
                                     to_email: toEmail,
                                     subject: `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`,
                                     body: replyText.trim(),
-                                    thread_id: currentThread?.threadId || currentMessage.threadId,
                                     tracker_id: trackerId,
                                   };
                                   
                                   console.log('Sending reply with payload:', payload);
                                   
-                                  const response = await fetch('https://superspidey-email-management.onrender.com/send-email', {
+                                  const response = await fetch('https://superspidey-email-management.onrender.com/send-reply-email', {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',

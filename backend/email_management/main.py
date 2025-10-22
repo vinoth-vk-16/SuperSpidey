@@ -1228,11 +1228,6 @@ async def send_email(request: SendEmailRequest):
                 'body': message
             }
 
-            # Add threadId if this is a reply
-            if request.thread_id:
-                send_request['body']['threadId'] = request.thread_id
-                print(f'Sending reply to thread: {request.thread_id}')
-
             result = service.users().messages().send(**send_request).execute()
 
             print(f'Email sent successfully with ID: {result["id"]}')
@@ -1255,7 +1250,7 @@ async def send_email(request: SendEmailRequest):
             # Store email data in Firestore
             email_data = {
                 'messageId': result['id'],
-                'threadId': result.get('threadId', request.thread_id or ''),
+                'threadId': result.get('threadId', ''),
                 'trackerId': request.tracker_id,  # Store the unique tracker ID from frontend
                 'from': request.user_email,
                 'to': [request.to_email],

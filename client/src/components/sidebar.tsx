@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
-import { Mail, Settings, LogOut, Inbox, PenSquare } from 'lucide-react';
+import { Mail, Settings, LogOut, Inbox, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState } from 'react';
@@ -26,8 +26,8 @@ export default function Sidebar() {
   };
 
   const navItems: NavLink[] = [
-    { icon: Inbox, label: 'Inbox', path: '/', count: null },
-    { icon: PenSquare, label: 'Compose', path: '/compose', count: null },
+    { icon: Mail, label: 'Inbox', path: '/', count: null },
+    { icon: SquarePen, label: 'Compose', path: '/compose', count: null },
   ];
 
   const bottomNavItems: NavLink[] = [
@@ -111,9 +111,9 @@ export default function Sidebar() {
                       logout();
                       setShowLogout(false);
                     }}
-                    className="w-full h-10 text-destructive hover:text-destructive hover:bg-destructive/20 transition-smooth animate-in slide-in-from-top-2"
+                    className="w-full h-9 text-destructive hover:text-destructive hover:bg-destructive/20 transition-smooth animate-in slide-in-from-top-2"
                   >
-                    <LogOut className="w-5 h-5" />
+                    <LogOut className="w-4 h-4" strokeWidth={2} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="text-xs">
@@ -143,15 +143,15 @@ function SidebarLink({ link, isActive, onClick }: SidebarLinkProps) {
         <button
           onClick={onClick}
           className={cn(
-            "w-full flex items-center justify-center p-3 rounded-lg transition-smooth group relative",
+            "w-full flex items-center justify-center p-2.5 rounded-lg transition-smooth group relative",
             isActive
               ? 'bg-primary text-primary-foreground shadow-sm hover:brightness-110'
               : 'text-sidebar-foreground hover:text-foreground hover:bg-sidebar-accent'
           )}
         >
-          <Icon className="w-5 h-5" />
+          <Icon className="w-4 h-4" strokeWidth={2} />
           {link.count !== null && link.count !== undefined && link.count > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-semibold rounded-full flex items-center justify-center shadow-sm">
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-semibold rounded-full flex items-center justify-center shadow-sm">
               {link.count > 99 ? '99+' : link.count}
             </span>
           )}

@@ -12,27 +12,27 @@
   --card-foreground: hsl(0, 0%, 95%);    /* Light grey card text */
   --popover: hsl(0, 0%, 12%);            /* Dark grey popover */
   --popover-foreground: hsl(0, 0%, 95%); /* Light grey popover text */
-  --primary: hsl(239, 84%, 67%);         /* Indigo accent */
+  --primary: hsl(271, 61%, 42%);         /* Custom purple #6d2aac */
   --primary-foreground: hsl(0, 0%, 100%);/* White on primary */
-  --secondary: hsl(243, 80%, 70%);       /* Purple accent */
+  --secondary: hsl(271, 61%, 42%);       /* Custom purple #6d2aac */
   --secondary-foreground: hsl(0, 0%, 100%);/* White on secondary */
   --muted: hsl(0, 0%, 15%);              /* Muted dark grey */
   --muted-foreground: hsl(0, 0%, 60%);   /* Muted text grey */
-  --accent: hsl(217, 91%, 65%);          /* Blue accent */
+  --accent: hsl(271, 61%, 42%);          /* Custom purple #6d2aac */
   --accent-foreground: hsl(0, 0%, 100%); /* White on accent */
   --destructive: hsl(0, 84%, 60%);       /* Red for destructive */
   --destructive-foreground: hsl(0, 0%, 100%);/* White on destructive */
   --border: hsl(0, 0%, 20%);             /* Subtle dark borders */
   --input: hsl(0, 0%, 15%);              /* Dark input backgrounds */
-  --ring: hsl(239, 84%, 67%);            /* Focus ring */
+  --ring: hsl(271, 61%, 42%);            /* Focus ring - Custom purple */
   --sidebar: hsl(0, 0%, 11%);            /* Slightly lighter sidebar */
   --sidebar-foreground: hsl(0, 0%, 95%); /* Light sidebar text */
-  --sidebar-primary: hsl(239, 84%, 67%); /* Indigo for active */
+  --sidebar-primary: hsl(271, 61%, 42%); /* Custom purple for active */
   --sidebar-primary-foreground: hsl(0, 0%, 100%);/* White on active */
   --sidebar-accent: hsl(0, 0%, 15%);     /* Sidebar hover */
   --sidebar-accent-foreground: hsl(0, 0%, 95%);/* Sidebar hover text */
   --sidebar-border: hsl(0, 0%, 20%);     /* Sidebar borders */
-  --sidebar-ring: hsl(239, 84%, 67%);    /* Sidebar focus */
+  --sidebar-ring: hsl(271, 61%, 42%);    /* Sidebar focus - Custom purple */
   --font-sans: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Menlo, monospace;
