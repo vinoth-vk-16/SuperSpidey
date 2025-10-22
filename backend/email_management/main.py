@@ -352,6 +352,25 @@ class MultiDraftResponse(BaseModel):
     success: bool
     message: str
 
+class FetchDraftsRequest(BaseModel):
+    user_email: str
+    page: int = 1  # Page number starting from 1
+
+class DraftItem(BaseModel):
+    draft_id: str
+    to_email: Optional[str]
+    subject: Optional[str]
+    body: Optional[str]
+    created_at: Optional[str]
+    updated_at: Optional[str]
+
+class FetchDraftsResponse(BaseModel):
+    user_email: str
+    drafts: List[DraftItem]
+    total_count: int
+    page: int
+    has_more: bool
+
 class FetchEmailsRequest(BaseModel):
     user_email: str
     page: int = 1  # Page number starting from 1
@@ -1486,6 +1505,82 @@ async def create_multi_draft(request: CreateMultiDraftRequest):
     except Exception as e:
         print(f'Error creating multi-draft for user {request.user_email}: {str(e)}')
         raise HTTPException(status_code=500, detail=f"Failed to create drafts: {str(e)}")
+
+@app.post("/fetch-drafts")
+async def fetch_drafts(request: FetchDraftsRequest):
+    """Fetch paginated email drafts for a user from Firestore (30 per page)"""
+    try:
+        # Validate page number
+        if request.page < 1:
+            raise HTTPException(status_code=400, detail="Page number must be 1 or greater")
+
+        user_email = request.user_email
+        page = request.page
+        per_page = 30
+
+        # Get all draft documents for the user
+        drafts_ref = db.collection('users').document(user_email).collection('drafts')
+        draft_docs = drafts_ref.list_documents()
+
+        # Convert to list and get total count
+        draft_ids = [doc.id for doc in draft_docs]
+        total_count = len(draft_ids)
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        paginated_draft_ids = draft_ids[offset:offset + per_page]
+
+        # Fetch content for each draft in the current page
+        drafts = []
+        for draft_id in paginated_draft_ids:
+            try:
+                # Get the content data for this draft
+                content_ref = drafts_ref.document(draft_id).collection('content').document('data')
+                content_doc = content_ref.get()
+
+                if content_doc.exists:
+                    content_data = content_doc.to_dict()
+                    draft_item = DraftItem(
+                        draft_id=draft_id,
+                        to_email=content_data.get('to_email'),
+                        subject=content_data.get('subject'),
+                        body=content_data.get('body'),
+                        created_at=content_data.get('created_at').isoformat() if content_data.get('created_at') and hasattr(content_data.get('created_at'), 'isoformat') else str(content_data.get('created_at', '')),
+                        updated_at=content_data.get('updated_at').isoformat() if content_data.get('updated_at') and hasattr(content_data.get('updated_at'), 'isoformat') else str(content_data.get('updated_at', ''))
+                    )
+                    drafts.append(draft_item)
+                else:
+                    # Draft exists but no content - create minimal entry
+                    draft_item = DraftItem(
+                        draft_id=draft_id,
+                        to_email=None,
+                        subject=None,
+                        body=None,
+                        created_at=None,
+                        updated_at=None
+                    )
+                    drafts.append(draft_item)
+
+            except Exception as draft_error:
+                print(f"Error fetching draft {draft_id}: {str(draft_error)}")
+                # Continue with other drafts
+
+        # Check if there are more pages
+        has_more = offset + per_page < total_count
+
+        return FetchDraftsResponse(
+            user_email=user_email,
+            drafts=drafts,
+            total_count=total_count,
+            page=page,
+            has_more=has_more
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in fetch-drafts: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/fetch-emails")
 async def fetch_emails(request: FetchEmailsRequest):

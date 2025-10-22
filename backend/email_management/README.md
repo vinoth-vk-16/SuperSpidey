@@ -164,6 +164,55 @@ Create multiple email drafts at once and store them in Firestore.
 **Error Responses:**
 - `500`: Failed to create drafts
 
+### POST /fetch-drafts
+Fetch paginated email drafts for a user from Firestore (30 drafts per page).
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "page": 1
+}
+```
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "drafts": [
+    {
+      "draft_id": "550e8400-e29b-41d4-a716-446655440000",
+      "to_email": "recipient@example.com",
+      "subject": "Draft Subject",
+      "body": "Draft content...",
+      "created_at": "2024-01-15T10:30:00.000Z",
+      "updated_at": "2024-01-15T10:30:00.000Z"
+    }
+  ],
+  "total_count": 1,
+  "page": 1,
+  "has_more": false
+}
+```
+
+**Parameters:**
+- `user_email`: User's email address (required)
+- `page`: Page number starting from 1 (optional, defaults to 1)
+
+**Pagination:**
+- Returns 30 drafts per page
+- `has_more`: Boolean indicating if there are more pages available
+- `total_count`: Total number of drafts for the user
+
+**Response Fields:**
+- `draft_id`: Unique identifier for the draft
+- `to_email`, `subject`, `body`: Draft content (may be null for partial drafts)
+- `created_at`, `updated_at`: Timestamps (ISO format)
+
+**Error Responses:**
+- `400`: Invalid page number (must be 1 or greater)
+- `500`: Failed to fetch drafts
+
 ### POST /fetch-emails
 Fetch paginated email threads for a user from Firestore, automatically refreshing from Gmail first to ensure latest data.
 
