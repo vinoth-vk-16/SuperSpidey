@@ -96,11 +96,13 @@ Create a single email draft and store it in Firestore.
 ```json
 {
   "user_email": "user@example.com",
-  "to_email": "recipient@example.com",
-  "subject": "Draft Email Subject",
-  "body": "Draft email content..."
+  "to_email": "recipient@example.com",    // Optional
+  "subject": "Draft Email Subject",       // Optional
+  "body": "Draft email content..."        // Optional
 }
 ```
+
+**Note:** All fields except `user_email` are optional for single draft creation.
 
 **Response:**
 ```json
@@ -127,19 +129,21 @@ Create multiple email drafts at once and store them in Firestore.
   "drafts": [
     {
       "user_email": "user@example.com",
-      "to_email": "recipient1@example.com",
-      "subject": "First Draft",
-      "body": "First draft content..."
+      "to_email": "recipient1@example.com",  // Required
+      "subject": "First Draft",             // Required
+      "body": "First draft content..."      // Required
     },
     {
       "user_email": "user@example.com",
-      "to_email": "recipient2@example.com",
-      "subject": "Second Draft",
-      "body": "Second draft content..."
+      "to_email": "recipient2@example.com",  // Required
+      "subject": "Second Draft",             // Required
+      "body": "Second draft content..."      // Required
     }
   ]
 }
 ```
+
+**Note:** All fields in each draft item are required for multi-draft creation.
 
 **Response:**
 ```json

@@ -325,13 +325,19 @@ class SendReplyEmailRequest(BaseModel):
 
 class CreateDraftRequest(BaseModel):
     user_email: str
-    to_email: str
-    subject: str
-    body: str
+    to_email: Optional[str] = None  # Optional for single draft
+    subject: Optional[str] = None   # Optional for single draft
+    body: Optional[str] = None      # Optional for single draft
+
+class CreateMultiDraftItem(BaseModel):
+    user_email: str
+    to_email: str    # Required for multi-draft
+    subject: str     # Required for multi-draft
+    body: str        # Required for multi-draft
 
 class CreateMultiDraftRequest(BaseModel):
     user_email: str
-    drafts: List[CreateDraftRequest]
+    drafts: List[CreateMultiDraftItem]
 
 class DraftResponse(BaseModel):
     draft_id: str
