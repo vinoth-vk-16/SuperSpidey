@@ -425,23 +425,6 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
               </span>
             </div>
 
-            {/* View Status - Only for sent emails with tracking */}
-            {isSentWithTracking && (
-              <div className="flex-shrink-0 flex items-center gap-1 ml-3" title={hasBeenViewed ? "Viewed" : "Not viewed yet"}>
-                {hasBeenViewed ? (
-                  <>
-                    <Eye className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-[10px] text-green-600 font-medium">Viewed</span>
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">Not viewed</span>
-                  </>
-                )}
-              </div>
-            )}
-
             {/* Quick Actions - visible on hover */}
             <div className={`email-actions flex items-center gap-0.5 flex-shrink-0 ml-1 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
             <Button
@@ -468,7 +451,7 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
-                <Button 
+            <Button
               variant="ghost"
               size="icon"
               onClick={(e) => {
@@ -479,8 +462,25 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
               title="Snooze"
             >
               <Clock className="w-3.5 h-3.5" />
-                </Button>
-            </div>
+            </Button>
+          </div>
+
+            {/* View Status - Only for sent emails with tracking - At the far right end */}
+            {isSentWithTracking && (
+              <div className="flex-shrink-0 flex items-center gap-1 ml-4 w-20 justify-end" title={hasBeenViewed ? "Viewed" : "Not viewed yet"}>
+                {hasBeenViewed ? (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-green-600" />
+                    <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">Viewed</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Not viewed</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -40,11 +40,15 @@ export default function ComposePage() {
         throw new Error('Recipient email is required');
       }
       
+      // Generate unique tracker ID for this email
+      const trackerId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       const payload = {
         user_email: user.email,
         to_email: cleanToEmail,
         subject: emailData.subject.trim() || '(No subject)',
         body: emailData.body.trim(),
+        tracker_id: trackerId,
       };
       
       console.log('Sending email with payload:', payload);

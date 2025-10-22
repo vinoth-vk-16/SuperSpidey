@@ -1520,22 +1520,35 @@ async def track_email_view(tracker_id: str, user_email: str, request: Request):
         # Query for the specific email with this trackerId in the user's collection
         emails_ref = db.collection('users').document(user_email).collection('emails')
         query = emails_ref.where('trackerId', '==', tracker_id).limit(1)
+
+        print(f"🔍 Searching for tracker_id: {tracker_id} for user: {user_email}")
+
         matching_emails = query.stream()
+        email_docs = list(matching_emails)
+
+        print(f"📊 Found {len(email_docs)} matching emails")
 
         found = False
-        for email_doc in matching_emails:
+        for email_doc in email_docs:
+            email_data = email_doc.to_dict()
+            print(f"📧 Found email: {email_doc.id}, trackerId: {email_data.get('trackerId')}, subject: {email_data.get('subject', 'N/A')}")
+
             # Update view_status and add tracking data
             email_ref = emails_ref.document(email_doc.id)
             email_ref.update({
                 'view_status': True,
                 'view_tracking': firestore.ArrayUnion([tracking_data])
             })
-            print(f"✅ Tracked view for email with tracker {tracker_id} by user {user_email}")
+            print(f"✅ Successfully updated view_status for email {email_doc.id} with tracker {tracker_id}")
             found = True
             break
 
         if not found:
-            print(f"⚠️ Email with tracker {tracker_id} not found for user {user_email}")
+            print(f"⚠️ No email found with tracker {tracker_id} for user {user_email}")
+            # Let's also check if there are any emails at all for this user
+            all_emails = emails_ref.limit(5).stream()
+            email_count = sum(1 for _ in all_emails)
+            print(f"ℹ️ User {user_email} has {email_count} total emails in database")
 
         # Return a 1x1 transparent pixel
         pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")

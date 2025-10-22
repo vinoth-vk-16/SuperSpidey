@@ -548,12 +548,16 @@ export default function EmailDetailPage() {
                                     return;
                                   }
                                   
+                                  // Generate unique tracker ID for this email
+                                  const trackerId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                  
                                   const payload = {
                                     user_email: user.email,
                                     to_email: toEmail,
                                     subject: `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`,
                                     body: replyText.trim(),
                                     thread_id: currentThread?.threadId || currentMessage.threadId,
+                                    tracker_id: trackerId,
                                   };
                                   
                                   console.log('Sending reply with payload:', payload);
