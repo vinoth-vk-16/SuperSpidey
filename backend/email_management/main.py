@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -59,7 +60,7 @@ def clean_response_text(text: str) -> str:
     # Remove any remaining leading/trailing whitespace
     return cleaned.strip()
 
-async def generate_email_draft(prompt: str, api_key: str) -> Dict[str, str]:
+async def generate_email_draft(prompt: str, api_key: str, context: Optional[str] = None, previous_email_context: Optional[str] = None) -> Dict[str, str]:
     """Generate email draft using Gemini AI"""
     try:
         if not api_key or api_key.strip() == '':
@@ -94,7 +95,17 @@ async def generate_email_draft(prompt: str, api_key: str) -> Dict[str, str]:
                 detail=f"No Gemini models available. Last error: {str(last_error)}"
             )
 
-        system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query".
+        system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query"."""
+
+        # Add user context if provided
+        if context:
+            system_prompt += f"\n\nUSER CONTEXT: {context}"
+
+        # Add previous email context if provided
+        if previous_email_context:
+            system_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to generate a more relevant and contextual email response."
+
+        system_prompt += """
 
 CRITICAL: Respond with a JSON object containing both subject and body fields. Structure your response EXACTLY like this:
 {
@@ -150,7 +161,7 @@ The body should be a complete email with proper closing like "Thanks" or "Best r
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate email draft: {str(e)}")
 
-async def improve_email(text: str, action: str, api_key: str, custom_prompt: Optional[str] = None) -> str:
+async def improve_email(text: str, action: str, api_key: str, custom_prompt: Optional[str] = None, context: Optional[str] = None, previous_email_context: Optional[str] = None) -> str:
     """Improve email using Gemini AI"""
     try:
         if not api_key or api_key.strip() == '':
@@ -185,23 +196,54 @@ async def improve_email(text: str, action: str, api_key: str, custom_prompt: Opt
                 detail=f"No Gemini models available. Last error: {str(last_error)}"
             )
 
-        # If custom prompt is provided, use it directly
+        # If custom prompt is provided, use it directly but add output format instructions
         if custom_prompt and action == "custom":
-            action_prompt = custom_prompt
-        else:
-            # Use predefined prompts
-            action_prompts = {
-                "improve": "Improve the writing style, clarity, and professionalism of this email while maintaining its meaning. Keep it concise and to the point:",
-                "shorten": "Make this email more concise while preserving all important information:",
-                "lengthen": "Expand this email with more detail and context while maintaining professionalism:",
-                "fix-grammar": "Fix any spelling, grammar, and punctuation errors in this email:",
-                "simplify": "Simplify the language and structure of this email to make it easier to understand:",
-                "rewrite": "Rewrite this email in a more natural, conversational tone while keeping it professional:",
-                "write": "Write a complete professional email based on this prompt:"
-            }
-            action_prompt = action_prompts.get(action, "Improve this email:")
+            action_prompt = f"""{custom_prompt}
 
-        result = model.generate_content(f"{action_prompt}\n\n{text}")
+CRITICAL: Respond ONLY with the email content. Do not include any explanations, options, or additional text. Just return the email."""
+        else:
+            # Use predefined prompts with structured output format
+            action_prompts = {
+                "improve": """Improve the writing style, clarity, and professionalism of this email while maintaining its meaning. Keep it concise and to the point.
+
+CRITICAL: Respond ONLY with the improved email content. Do not include any explanations, options, or additional text. Just return the cleaned, improved email.""",
+                "shorten": """Make this email more concise while preserving all important information.
+
+CRITICAL: Respond ONLY with the shortened email content. Do not include any explanations, options, or additional text. Just return the concise email.""",
+                "lengthen": """Expand this email with more detail and context while maintaining professionalism.
+
+CRITICAL: Respond ONLY with the expanded email content. Do not include any explanations, options, or additional text. Just return the detailed email.""",
+                "fix-grammar": """Fix any spelling, grammar, and punctuation errors in this email.
+
+CRITICAL: Respond ONLY with the corrected email content. Do not include any explanations, options, or additional text. Just return the corrected email.""",
+                "simplify": """Simplify the language and structure of this email to make it easier to understand.
+
+CRITICAL: Respond ONLY with the simplified email content. Do not include any explanations, options, or additional text. Just return the simplified email.""",
+                "rewrite": """Rewrite this email in a more natural, conversational tone while keeping it professional.
+
+CRITICAL: Respond ONLY with the rewritten email content. Do not include any explanations, options, or additional text. Just return the rewritten email.""",
+                "write": """Write a complete professional email based on this prompt.
+
+CRITICAL: Respond ONLY with the email content. Do not include any explanations, options, or additional text. Just return the email."""
+            }
+            action_prompt = action_prompts.get(action, """Improve this email.
+
+CRITICAL: Respond ONLY with the improved email content. Do not include any explanations, options, or additional text. Just return the cleaned email.""")
+
+        # Build the final prompt with context
+        final_prompt = action_prompt
+
+        # Add user context if provided
+        if context:
+            final_prompt += f"\n\nUSER CONTEXT: {context}"
+
+        # Add previous email context if provided
+        if previous_email_context:
+            final_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to improve the email with better context and relevance."
+
+        final_prompt += f"\n\n{text}"
+
+        result = model.generate_content(final_prompt)
         response = result.text
 
         return response or "Failed to improve email"
@@ -279,6 +321,8 @@ class GmailWebhookRequest(BaseModel):
 class GenerateEmailRequest(BaseModel):
     prompt: str
     api_key: str
+    context: Optional[str] = None  # Context about the user to personalize the email
+    previous_email_context: Optional[str] = None  # Previous emails in the thread for better context
 
 class GenerateEmailResponse(BaseModel):
     subject: str
@@ -289,10 +333,41 @@ class ImproveEmailRequest(BaseModel):
     action: str  # write, shorten, simplify, improve, lengthen, fix-grammar, rewrite, custom
     api_key: str
     custom_prompt: Optional[str] = None
+    context: Optional[str] = None  # Context about the user to personalize the email
+    previous_email_context: Optional[str] = None  # Previous emails in the thread for better context
 
 class ImproveEmailResponse(BaseModel):
     subject: str
     body: str
+
+class SaveUserInfoRequest(BaseModel):
+    user_email: str
+    user_name: str
+    user_info: str
+    style: str
+
+class UpdateUserInfoRequest(BaseModel):
+    user_email: str
+    user_name: Optional[str] = None
+    user_info: Optional[str] = None
+    style: Optional[str] = None
+
+class UserInfoResponse(BaseModel):
+    user_email: str
+    user_name: str
+    user_info: str
+    style: str
+    message: str
+
+class MarkEmailReadRequest(BaseModel):
+    user_email: str
+    message_id: str
+
+class MarkEmailReadResponse(BaseModel):
+    user_email: str
+    message_id: str
+    success: bool
+    message: str
 
 class StartWatchRequest(BaseModel):
     user_email: str
@@ -1089,6 +1164,7 @@ async def send_email(request: SendEmailRequest):
                 'labels': ['SENT'],
                 'isRead': True,
                 'isSent': True,
+                'view_status': False,
                 'timestamp': datetime.now()
             }
 
@@ -1204,7 +1280,12 @@ async def gmail_webhook(request: GmailWebhookRequest):
 async def generate_email(request: GenerateEmailRequest):
     """Generate email draft using Gemini AI"""
     try:
-        result = await generate_email_draft(request.prompt, request.api_key)
+        result = await generate_email_draft(
+            request.prompt,
+            request.api_key,
+            request.context,
+            request.previous_email_context
+        )
         return GenerateEmailResponse(**result)
     except HTTPException:
         raise
@@ -1219,13 +1300,194 @@ async def improve_email_endpoint(request: ImproveEmailRequest):
             request.text,
             request.action,
             request.api_key,
-            request.custom_prompt
+            request.custom_prompt,
+            request.context,
+            request.previous_email_context
         )
         return ImproveEmailResponse(subject="", body=improved_text)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/save-user-info")
+async def save_user_info(request: SaveUserInfoRequest):
+    """Save user information in Firestore"""
+    try:
+        user_email = request.user_email
+
+        # Reference to the user document
+        user_ref = db.collection('users').document(user_email)
+
+        # Prepare user info data
+        user_info_data = {
+            'user_name': request.user_name,
+            'user_info': request.user_info,
+            'style': request.style
+        }
+
+        # Update the document with user info (merge=True to preserve other fields like gmail-watch, lastSyncTimestamp)
+        user_ref.set(user_info_data, merge=True)
+
+        return UserInfoResponse(
+            user_email=user_email,
+            user_name=request.user_name,
+            user_info=request.user_info,
+            style=request.style,
+            message="User information saved successfully"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save user info: {str(e)}")
+
+@app.post("/update-user-info")
+async def update_user_info(request: UpdateUserInfoRequest):
+    """Update user information in Firestore (only provided fields are updated)"""
+    try:
+        user_email = request.user_email
+
+        # Reference to the user document
+        user_ref = db.collection('users').document(user_email)
+
+        # Prepare update data (only include fields that are provided)
+        update_data = {}
+        if request.user_name is not None:
+            update_data['user_name'] = request.user_name
+        if request.user_info is not None:
+            update_data['user_info'] = request.user_info
+        if request.style is not None:
+            update_data['style'] = request.style
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="At least one field must be provided for update")
+
+        # Update only the provided fields
+        user_ref.update(update_data)
+
+        # Get the updated document to return current values
+        updated_doc = user_ref.get()
+        if not updated_doc.exists:
+            raise HTTPException(status_code=404, detail="User document not found")
+
+        updated_data = updated_doc.to_dict()
+
+        return UserInfoResponse(
+            user_email=user_email,
+            user_name=updated_data.get('user_name', ''),
+            user_info=updated_data.get('user_info', ''),
+            style=updated_data.get('style', ''),
+            message="User information updated successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update user info: {str(e)}")
+
+@app.get("/track-email-view/{message_id}")
+async def track_email_view(message_id: str, request: Request, user_email: Optional[str] = None):
+    """Track email view by updating view_status and logging view data"""
+    try:
+        # Get tracking data
+        ip = request.client.host if request.client else "unknown"
+        user_agent = request.headers.get("user-agent", "unknown")
+
+        # Create tracking data
+        tracking_data = {
+            'ip': ip,
+            'user_agent': user_agent,
+            'timestamp': datetime.now(),
+            'viewed_at': firestore.SERVER_TIMESTAMP
+        }
+
+        # If user_email is provided, update specific email
+        if user_email:
+            # Reference to the specific email document
+            email_ref = db.collection('users').document(user_email).collection('emails').document(message_id)
+
+            # Check if the email exists
+            email_doc = email_ref.get()
+            if email_doc.exists:
+                # Update view_status and add tracking data
+                email_ref.update({
+                    'view_status': True,
+                    'view_tracking': firestore.ArrayUnion([tracking_data])
+                })
+                print(f"✅ Tracked view for email {message_id} by user {user_email}")
+            else:
+                print(f"⚠️ Email {message_id} not found for user {user_email}")
+        else:
+            # If no user_email provided, try to find the email across all users
+            # This is less efficient but allows for more flexible tracking
+            users_ref = db.collection('users')
+            users = users_ref.stream()
+
+            found = False
+            for user_doc in users:
+                user_id = user_doc.id
+                email_ref = db.collection('users').document(user_id).collection('emails').document(message_id)
+
+                if email_ref.get().exists:
+                    email_ref.update({
+                        'view_status': True,
+                        'view_tracking': firestore.ArrayUnion([tracking_data])
+                    })
+                    print(f"✅ Tracked view for email {message_id} by user {user_id}")
+                    found = True
+                    break
+
+            if not found:
+                print(f"⚠️ Email {message_id} not found in any user's collection")
+
+        # Return a 1x1 transparent pixel
+        # Create a simple 1x1 transparent PNG pixel
+        pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+
+        # For now, return a simple response. In production, you'd return the actual pixel
+        # return FileResponse("path/to/pixel.png", media_type="image/png")
+
+        # Since we don't have a static pixel file, return the pixel data directly
+        from fastapi.responses import Response
+        return Response(content=pixel_data, media_type="image/png")
+
+    except Exception as e:
+        print(f"❌ Error tracking email view for {message_id}: {str(e)}")
+        # Still return pixel even on error to not break email tracking
+        pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+        from fastapi.responses import Response
+        return Response(content=pixel_data, media_type="image/png")
+
+@app.post("/mark-email-read")
+async def mark_email_read(request: MarkEmailReadRequest):
+    """Mark an email as read by updating isRead status from false to true"""
+    try:
+        user_email = request.user_email
+        message_id = request.message_id
+
+        # Reference to the specific email document
+        email_ref = db.collection('users').document(user_email).collection('emails').document(message_id)
+
+        # Check if the email exists
+        email_doc = email_ref.get()
+        if not email_doc.exists:
+            raise HTTPException(status_code=404, detail="Email not found")
+
+        # Update the isRead status to true
+        email_ref.update({
+            'isRead': True
+        })
+
+        return MarkEmailReadResponse(
+            user_email=user_email,
+            message_id=message_id,
+            success=True,
+            message="Email marked as read successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to mark email as read: {str(e)}")
 
 @app.post("/start-watch")
 async def start_gmail_watch(request: StartWatchRequest):

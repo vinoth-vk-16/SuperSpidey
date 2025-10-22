@@ -227,13 +227,15 @@ Start Gmail watch for a user to enable real-time email notifications.
 - Returns existing watch info if already active
 
 ### POST /generate-email
-Generate email draft using Gemini AI.
+Generate email draft using Gemini AI. Supports optional user context and previous conversation context for more personalized and relevant emails.
 
 **Request Body:**
 ```json
 {
   "prompt": "Write a professional email to request a meeting with the CEO",
-  "api_key": "your-gemini-api-key"
+  "api_key": "your-gemini-api-key",
+  "context": "I am a software developer at TechCorp, specializing in AI applications",  // Optional: User context for personalization
+  "previous_email_context": "Previous email thread content here..."  // Optional: Previous emails in the thread for better context
 }
 ```
 
@@ -251,7 +253,7 @@ Generate email draft using Gemini AI.
 - Handles various email types and scenarios
 
 ### POST /improve-email
-Improve or modify email content using Gemini AI with different actions.
+Improve or modify email content using Gemini AI with different actions. Returns clean, properly formatted email content without explanations or multiple options. Supports optional user context and previous conversation context for more personalized improvements.
 
 **Request Body:**
 ```json
@@ -259,7 +261,9 @@ Improve or modify email content using Gemini AI with different actions.
   "text": "Your email content here...",
   "action": "improve",  // Options: write, shorten, simplify, improve, lengthen, fix-grammar, rewrite, custom
   "api_key": "your-gemini-api-key",
-  "custom_prompt": "optional custom prompt for 'custom' action"
+  "custom_prompt": "optional custom prompt for 'custom' action",
+  "context": "I am a software developer at TechCorp, specializing in AI applications",  // Optional: User context for personalization
+  "previous_email_context": "Previous email thread content here..."  // Optional: Previous emails in the thread for better context
 }
 ```
 
@@ -280,6 +284,128 @@ Improve or modify email content using Gemini AI with different actions.
 - `fix-grammar`: Correct spelling and grammar
 - `rewrite`: Rewrite in conversational tone
 - `custom`: Use custom prompt
+
+### POST /save-user-info
+Save user information including name, personal details, and writing style preferences.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "user_name": "John Doe",
+  "user_info": "Software developer at TechCorp, specializes in AI applications",
+  "style": "professional, concise, technical"
+}
+```
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "user_name": "John Doe",
+  "user_info": "Software developer at TechCorp, specializes in AI applications",
+  "style": "professional, concise, technical",
+  "message": "User information saved successfully"
+}
+```
+
+**Notes:**
+- Stores data in Firestore `users` collection under the email document ID
+- Merges with existing data (preserves `gmail-watch`, `lastSyncTimestamp`, etc.)
+- All fields are required for initial save
+
+### POST /update-user-info
+Update user information selectively. Only provided fields will be updated.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "user_name": "Jane Doe",  // Optional - only update if provided
+  "style": "casual, friendly"  // Optional - only update if provided
+}
+```
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "user_name": "Jane Doe",
+  "user_info": "Software developer at TechCorp, specializes in AI applications",
+  "style": "casual, friendly",
+  "message": "User information updated successfully"
+}
+```
+
+**Notes:**
+- All fields are optional - only send what you want to update
+- At least one field must be provided
+- Returns the complete updated user information
+
+### POST /mark-email-read
+Mark a specific email as read by updating the isRead status from false to true.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "message_id": "18c1b4f2e3d4a5b6"
+}
+```
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "message_id": "18c1b4f2e3d4a5b6",
+  "success": true,
+  "message": "Email marked as read successfully"
+}
+```
+
+**Notes:**
+- Updates the `isRead` field in the user's email document
+- Returns 404 if the email doesn't exist
+- Useful for marking emails as read in the UI
+
+### GET /track-email-view/{message_id}
+Track email opens/views by updating view_status and logging view data. Returns a 1x1 transparent tracking pixel.
+
+**URL Parameters:**
+- `message_id`: The Gmail message ID to track
+
+**Query Parameters:**
+- `user_email` (optional): User's email address for faster lookup
+
+**Example:**
+```
+GET /track-email-view/18c1b4f2e3d4a5b6?user_email=user@example.com
+```
+
+**Response:**
+Returns a 1x1 transparent PNG pixel image.
+
+**Behavior:**
+- Updates `view_status` from `false` to `true`
+- Logs tracking data including IP, user-agent, and timestamp
+- Stores tracking history in `view_tracking` array
+- Works even without `user_email` (searches all users)
+- Always returns pixel image regardless of success/failure
+
+**Tracking Data Stored:**
+```json
+{
+  "view_status": true,
+  "view_tracking": [
+    {
+      "ip": "192.168.1.1",
+      "user_agent": "Mozilla/5.0...",
+      "timestamp": "2025-01-01T12:00:00",
+      "viewed_at": "Firestore timestamp"
+    }
+  ]
+}
+```
 
 ## Features
 
