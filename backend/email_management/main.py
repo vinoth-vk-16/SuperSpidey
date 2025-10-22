@@ -1519,12 +1519,7 @@ async def track_email_view(tracker_id: str, user_email: str, request: Request):
             'viewed_at': firestore.SERVER_TIMESTAMP
         }
 
-        # Insert tracking data
-        tracking_ref = db.collection('email_tracking').document()
-        tracking_ref.set(tracking_doc)
-        print(f"✅ Logged tracking data for tracker {tracker_id}, user {user_email}")
-
-        # Now try to find and update the email
+        # Option 1: Store tracking data directly in email document (simpler approach)
         try:
             emails_ref = db.collection('users').document(user_email).collection('emails')
             query = emails_ref.where('trackerId', '==', tracker_id).limit(1)
@@ -1532,17 +1527,32 @@ async def track_email_view(tracker_id: str, user_email: str, request: Request):
 
             for email_doc in matching_emails:
                 email_ref = emails_ref.document(email_doc.id)
+
+                # Update email with view status and tracking data
                 email_ref.update({
                     'view_status': True,
                     'last_viewed': firestore.SERVER_TIMESTAMP,
-                    'view_count': firestore.Increment(1)
+                    'view_tracking': firestore.ArrayUnion([{
+                        'ip': ip,
+                        'user_agent': user_agent,
+                        'timestamp': datetime.utcnow(),
+                        'viewed_at': firestore.SERVER_TIMESTAMP
+                    }])
                 })
-                print(f"✅ Updated email view_status for tracker {tracker_id}")
+                print(f"✅ Updated email view_status and logged tracking data for tracker {tracker_id}")
                 break
             else:
-                print(f"⚠️ Email not found for tracker {tracker_id}, but tracking logged")
-        except Exception as email_update_error:
-            print(f"⚠️ Could not update email status: {str(email_update_error)}, but tracking logged")
+                print(f"⚠️ Email not found for tracker {tracker_id}")
+        except Exception as e:
+            print(f"❌ Failed to update email tracking: {str(e)}")
+
+        # Option 2: Also log to separate collection for analytics (uncomment if needed)
+        # try:
+        #     tracking_ref = db.collection('email_tracking').document()
+        #     tracking_ref.set(tracking_doc)
+        #     print(f"✅ Also logged to analytics collection")
+        # except Exception as log_error:
+        #     print(f"⚠️ Analytics logging failed: {str(log_error)}")
 
         # Return a 1x1 transparent pixel
         pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
