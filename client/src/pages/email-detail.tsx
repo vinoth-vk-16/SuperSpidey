@@ -22,6 +22,8 @@ interface Message {
   snippet: string;
   timestamp: string;
   isRead: boolean;
+  isSent?: boolean;
+  view_status?: boolean;
 }
 
 interface EmailThread {
@@ -478,9 +480,25 @@ export default function EmailDetailPage() {
                               to {recipientDisplay}
                             </div>
           </div>
-                          <div className="text-xs text-muted-foreground flex-shrink-0">
-                            {format(new Date(msg.timestamp), 'h:mm a').toUpperCase()}
-          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="text-xs text-muted-foreground flex-shrink-0">
+                              {format(new Date(msg.timestamp), 'h:mm a').toUpperCase()}
+                            </div>
+                            
+                            {/* View Status - Only for sent emails with tracking */}
+                            {isMe && msg.view_status !== undefined && (
+                              <div className="flex items-center gap-1.5" title={msg.view_status ? "Viewed" : "Not viewed yet"}>
+                                <img 
+                                  src={msg.view_status ? "/viewed.png" : "/in-progress.png"} 
+                                  alt={msg.view_status ? "Viewed" : "Not viewed"}
+                                  className="w-4 h-4"
+                                />
+                                <span className={`text-xs font-medium whitespace-nowrap ${msg.view_status ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {msg.view_status ? 'Viewed' : 'Not viewed'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
         </div>
 
                         {/* Message Body */}

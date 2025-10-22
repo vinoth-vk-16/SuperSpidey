@@ -15,6 +15,7 @@ import os
 import json
 import re
 import time
+import uuid
 from dotenv import load_dotenv
 import google.generativeai as genai
 import html
@@ -313,7 +314,37 @@ class SendEmailRequest(BaseModel):
     tracker_id: str  # Unique tracker ID from frontend for email tracking
     bcc: Optional[List[str]] = None
     cc: Optional[List[str]] = None
-    thread_id: Optional[str] = None  # For replying to existing threads
+
+class SendReplyEmailRequest(BaseModel):
+    user_email: str
+    thread_id: str  # Required for replies - the thread to reply to
+    to_email: str
+    subject: str
+    body: str
+    tracker_id: str  # Unique tracker ID from frontend for email tracking
+
+class CreateDraftRequest(BaseModel):
+    user_email: str
+    to_email: str
+    subject: str
+    body: str
+
+class CreateMultiDraftRequest(BaseModel):
+    user_email: str
+    drafts: List[CreateDraftRequest]
+
+class DraftResponse(BaseModel):
+    draft_id: str
+    user_email: str
+    success: bool
+    message: str
+
+class MultiDraftResponse(BaseModel):
+    user_email: str
+    drafts_created: int
+    draft_ids: List[str]
+    success: bool
+    message: str
 
 class FetchEmailsRequest(BaseModel):
     user_email: str
@@ -512,12 +543,9 @@ def create_message(sender: str, to: str, subject: str, body: str, cc: Optional[L
         '''.strip()
 
     formatted_body = format_email_body(body)
-    
-    # Add tracking pixel if tracker_id is provided
-    if tracker_id:
-        from urllib.parse import quote
-        tracking_pixel = f'<img src="https://superspidey-email-management.onrender.com/track-email-view/{tracker_id}?user_email={quote(sender)}" width="1" height="1" style="display:none;" alt="" />'
-        formatted_body = formatted_body + tracking_pixel
+
+    # Note: Tracking pixel is NOT added here to prevent auto-triggering
+    # The tracker_id is stored in email data and tracking happens via frontend
 
     # Build email headers
     headers = [
@@ -1189,7 +1217,6 @@ async def send_email(request: SendEmailRequest):
             body=request.body,
             cc=request.cc,
             bcc=request.bcc,
-            thread_id=request.thread_id,
             tracker_id=request.tracker_id
         )
 
@@ -1275,6 +1302,186 @@ async def send_email(request: SendEmailRequest):
     except Exception as e:
         print(f'Unexpected error: {e}')
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/send-reply-email")
+async def send_reply_email(request: SendReplyEmailRequest):
+    """Send a reply email in an existing thread using the user's stored OAuth credentials"""
+    try:
+        # Get user credentials
+        user_creds = get_user_credentials(request.user_email)
+
+        if not user_creds.get('oauth'):
+            raise HTTPException(status_code=404, detail="User credentials not found")
+
+        # Create OAuth2 credentials with proper client configuration
+        creds = Credentials(
+            token=user_creds['oauth'],
+            refresh_token=user_creds.get('refresh_token'),
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=google_config.get('client_id'),
+            client_secret=google_config.get('client_secret')
+        )
+
+        # Refresh token if expired
+        if creds.expired and creds.refresh_token:
+            creds.refresh(google.auth.transport.requests.Request())
+            # Store updated credentials
+            store_updated_credentials(
+                request.user_email,
+                creds.token,
+                creds.refresh_token
+            )
+
+        # Build Gmail service
+        service = build('gmail', 'v1', credentials=creds)
+
+        # Create the reply email message with thread_id
+        message = create_message(
+            sender=request.user_email,
+            to=request.to_email,
+            subject=request.subject,
+            body=request.body,
+            tracker_id=request.tracker_id
+        )
+
+        # Send the reply email
+        try:
+            # Prepare send request body with threadId for reply
+            send_request = {
+                'userId': 'me',
+                'body': {
+                    'raw': message['raw'],
+                    'threadId': request.thread_id  # This makes it a reply in the same thread
+                }
+            }
+
+            result = service.users().messages().send(**send_request).execute()
+
+            print(f'Reply email sent successfully with ID: {result["id"]} in thread: {request.thread_id}')
+
+            # Store reply email data in Firestore
+            email_data = {
+                'messageId': result['id'],
+                'threadId': request.thread_id,
+                'trackerId': request.tracker_id,
+                'from': request.user_email,
+                'to': [request.to_email],
+                'subject': request.subject,
+                'body': request.body,
+                'snippet': request.body[:100] + ('...' if len(request.body) > 100 else ''),
+                'headers': {
+                    'X-MyApp-ID': 'ContactSpidey',
+                    'Date': datetime.now().isoformat(),
+                    'From': request.user_email,
+                    'To': request.to_email,
+                    'Subject': request.subject
+                },
+                'labels': ['SENT'],
+                'isRead': True,
+                'isSent': True,
+                'view_status': False,
+                'timestamp': datetime.now()
+            }
+
+            # Store in Firestore
+            store_success = store_email_in_firestore(request.user_email, result['id'], email_data)
+            if not store_success:
+                print(f"Warning: Reply email sent but failed to store in database: {result['id']}")
+
+            return EmailResponse(message_id=result['id'], success=True)
+
+        except HttpError as e:
+            print(f'Error sending reply email: {e}')
+            if e.resp.status == 401:  # Unauthorized - likely token expired
+                raise HTTPException(status_code=401, detail="Authentication expired. Please re-authenticate.")
+            raise HTTPException(status_code=500, detail=f"Failed to send reply email: {str(e)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'Unexpected error in send-reply-email: {e}')
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/create-draft")
+async def create_draft(request: CreateDraftRequest):
+    """Create a single email draft and store it in Firestore"""
+    try:
+        # Generate a unique draft ID
+        draft_id = str(uuid.uuid4())
+
+        # Prepare draft data
+        draft_data = {
+            'to_email': request.to_email,
+            'subject': request.subject,
+            'body': request.body,
+            'created_at': firestore.SERVER_TIMESTAMP,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+
+        # Store draft in Firestore: users/{user_email}/drafts/{draft_id}/content
+        draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(draft_id).collection('content').document('data')
+        draft_ref.set(draft_data)
+
+        return DraftResponse(
+            draft_id=draft_id,
+            user_email=request.user_email,
+            success=True,
+            message="Draft created successfully"
+        )
+
+    except Exception as e:
+        print(f'Error creating draft for user {request.user_email}: {str(e)}')
+        raise HTTPException(status_code=500, detail=f"Failed to create draft: {str(e)}")
+
+@app.post("/create-multi-draft")
+async def create_multi_draft(request: CreateMultiDraftRequest):
+    """Create multiple email drafts and store them in Firestore"""
+    try:
+        draft_ids = []
+        created_count = 0
+
+        # Process each draft
+        for draft_request in request.drafts:
+            try:
+                # Generate a unique draft ID for each draft
+                draft_id = str(uuid.uuid4())
+
+                # Prepare draft data
+                draft_data = {
+                    'to_email': draft_request.to_email,
+                    'subject': draft_request.subject,
+                    'body': draft_request.body,
+                    'created_at': firestore.SERVER_TIMESTAMP,
+                    'updated_at': firestore.SERVER_TIMESTAMP
+                }
+
+                # Store draft in Firestore: users/{user_email}/drafts/{draft_id}/content
+                draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(draft_id).collection('content').document('data')
+                draft_ref.set(draft_data)
+
+                draft_ids.append(draft_id)
+                created_count += 1
+
+            except Exception as draft_error:
+                print(f'Error creating individual draft: {str(draft_error)}')
+                # Continue with other drafts even if one fails
+
+        if created_count == 0:
+            raise HTTPException(status_code=500, detail="Failed to create any drafts")
+
+        return MultiDraftResponse(
+            user_email=request.user_email,
+            drafts_created=created_count,
+            draft_ids=draft_ids,
+            success=True,
+            message=f"Successfully created {created_count} draft(s)"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'Error creating multi-draft for user {request.user_email}: {str(e)}')
+        raise HTTPException(status_code=500, detail=f"Failed to create drafts: {str(e)}")
 
 @app.post("/fetch-emails")
 async def fetch_emails(request: FetchEmailsRequest):

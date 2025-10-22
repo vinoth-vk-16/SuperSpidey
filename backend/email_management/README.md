@@ -38,15 +38,11 @@ Send an email using the user's stored OAuth credentials.
   "to_email": "recipient@example.com",
   "subject": "Email Subject",
   "body": "Email body content",
-  "tracker_id": "unique-tracker-12345",  // Required - unique ID from frontend for email tracking
+  "tracker_id": "unique-tracker-12345",  // Required - stored for frontend email tracking
   "cc": ["cc@example.com"],               // Optional
-  "bcc": ["bcc@example.com"],             // Optional
-  "thread_id": "thread123"                // Optional - for replying to existing threads
+  "bcc": ["bcc@example.com"]              // Optional
 }
 ```
-
-**Thread Support:**
-When `thread_id` is provided, the email will be sent as a reply to the existing thread. The email will appear in the same conversation in Gmail and be properly threaded in your email client.
 
 **Response:**
 ```json
@@ -60,6 +56,109 @@ When `thread_id` is provided, the email will be sent as a reply to the existing 
 - `401`: Authentication expired - user needs to re-authenticate
 - `404`: User credentials not found in Firestore
 - `500`: Failed to send email or other server errors
+
+### POST /send-reply-email
+Send a reply email in an existing thread using the user's stored OAuth credentials.
+
+**Request Body:**
+```json
+{
+  "user_email": "sender@example.com",
+  "thread_id": "thread1234567890",      // Required - thread to reply to
+  "to_email": "recipient@example.com",
+  "subject": "Re: Original Subject",
+  "body": "Reply content here...",
+  "tracker_id": "unique-tracker-12345"  // Required - stored for frontend email tracking
+}
+```
+
+**Response:**
+```json
+{
+  "message_id": "1234567890abcdef",
+  "success": true
+}
+```
+
+**Thread Support:**
+This endpoint sends emails as replies in existing Gmail threads. The email will appear in the same conversation and maintain proper threading in Gmail.
+
+**Error Responses:**
+- `400`: Missing required fields (thread_id, etc.)
+- `401`: Authentication expired - user needs to re-authenticate
+- `404`: User credentials or thread not found
+- `500`: Failed to send reply email
+
+### POST /create-draft
+Create a single email draft and store it in Firestore.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "to_email": "recipient@example.com",
+  "subject": "Draft Email Subject",
+  "body": "Draft email content..."
+}
+```
+
+**Response:**
+```json
+{
+  "draft_id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_email": "user@example.com",
+  "success": true,
+  "message": "Draft created successfully"
+}
+```
+
+**Storage:** `users/{user_email}/drafts/{draft_id}/content/data`
+
+**Error Responses:**
+- `500`: Failed to create draft
+
+### POST /create-multi-draft
+Create multiple email drafts at once and store them in Firestore.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "drafts": [
+    {
+      "user_email": "user@example.com",
+      "to_email": "recipient1@example.com",
+      "subject": "First Draft",
+      "body": "First draft content..."
+    },
+    {
+      "user_email": "user@example.com",
+      "to_email": "recipient2@example.com",
+      "subject": "Second Draft",
+      "body": "Second draft content..."
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "drafts_created": 2,
+  "draft_ids": [
+    "550e8400-e29b-41d4-a716-446655440000",
+    "550e8400-e29b-41d4-a716-446655440001"
+  ],
+  "success": true,
+  "message": "Successfully created 2 draft(s)"
+}
+```
+
+**Storage:** Each draft stored as `users/{user_email}/drafts/{draft_id}/content/data`
+
+**Error Responses:**
+- `500`: Failed to create drafts
 
 ### POST /fetch-emails
 Fetch paginated email threads for a user from Firestore, automatically refreshing from Gmail first to ensure latest data.
@@ -423,6 +522,8 @@ Returns a 1x1 transparent PNG pixel image.
 - Stores tracking history in `view_tracking` array
 - Queries the specific user's email collection for efficient lookup
 - Always returns pixel image regardless of success/failure
+
+**Note:** Tracking pixels are NOT embedded in sent emails to prevent auto-triggering. Tracking occurs when users view emails in the application frontend.
 
 **Tracking Data Stored:**
 ```json

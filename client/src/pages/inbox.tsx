@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter';
-import { Search, Archive, Trash2, Clock, Check, RotateCcw, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Search, Archive, Trash2, Clock, Check, RotateCcw, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
@@ -340,15 +340,6 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
   const hasUnreadMessages = thread.messages.some(msg => !msg.isRead);
   
   const latestMessage = thread.messages[0];
-  
-  // Check if this is a sent email with view status tracking
-  const isSentWithTracking = latestMessage.isSent && latestMessage.view_status !== undefined;
-  const hasBeenViewed = latestMessage.view_status === true;
-  
-  // Debug logging (remove after testing)
-  if (thread.threadId) {
-    console.log('Thread:', thread.subject, 'Messages:', thread.messages.map(m => ({ id: m.messageId, isRead: m.isRead })), 'hasUnread:', hasUnreadMessages);
-  }
 
   return (
     <div>
@@ -464,23 +455,6 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
               <Clock className="w-3.5 h-3.5" />
             </Button>
           </div>
-
-            {/* View Status - Only for sent emails with tracking - At the far right end */}
-            {isSentWithTracking && (
-              <div className="flex-shrink-0 flex items-center gap-1 ml-4 w-20 justify-end" title={hasBeenViewed ? "Viewed" : "Not viewed yet"}>
-                {hasBeenViewed ? (
-                  <>
-                    <Eye className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-[10px] text-green-600 font-medium whitespace-nowrap">Viewed</span>
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Not viewed</span>
-                  </>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>
