@@ -1535,8 +1535,8 @@ async def track_email_view(tracker_id: str, user_email: str, request: Request):
                     'view_tracking': firestore.ArrayUnion([{
                         'ip': ip,
                         'user_agent': user_agent,
-                        'timestamp': datetime.utcnow(),
-                        'viewed_at': firestore.SERVER_TIMESTAMP
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'viewed_at': datetime.utcnow().isoformat()
                     }])
                 })
                 print(f"✅ Updated email view_status and logged tracking data for tracker {tracker_id}")
