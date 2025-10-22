@@ -1,8 +1,8 @@
 import { useLocation } from 'wouter';
 import { Reply, Forward, Sparkles, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useQuery } from '@tanstack/react-query';
-import { useState, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import Sidebar from '@/components/sidebar';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,6 +44,8 @@ export default function EmailDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAI, setShowAI] = useState(false);
+  const queryClient = useQueryClient();
+  
   // AI keyboard shortcut - only when replying
   useKeyboardShortcut(['ctrl', 'u'], () => {
     if (isReplying) setShowAI(true);
@@ -51,6 +53,33 @@ export default function EmailDetailPage() {
   useKeyboardShortcut(['meta', 'u'], () => {
     if (isReplying) setShowAI(true);
   }, [isReplying]);
+
+  // Mark email as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (messageIds: string[]) => {
+      const userEmail = 'imvinothvk521@gmail.com';
+      
+      // Mark all messages in the thread as read
+      const promises = messageIds.map(msgId =>
+        fetch('https://superspidey-email-management.onrender.com/mark-email-read', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_email: userEmail,
+            message_id: msgId,
+          }),
+        })
+      );
+      
+      await Promise.all(promises);
+    },
+    onSuccess: () => {
+      // Invalidate emails query to refresh the inbox
+      queryClient.invalidateQueries({ queryKey: ['emails'] });
+    },
+  });
 
   const { data: emailData, isLoading, error } = useQuery({
     queryKey: ['emails', currentPage],
@@ -87,6 +116,19 @@ export default function EmailDetailPage() {
     }
   }
 
+  // Mark all unread messages in the thread as read when viewing
+  useEffect(() => {
+    if (currentThread && currentThread.messages) {
+      const unreadMessageIds = currentThread.messages
+        .filter(msg => !msg.isRead)
+        .map(msg => msg.messageId);
+      
+      if (unreadMessageIds.length > 0) {
+        markAsReadMutation.mutate(unreadMessageIds);
+      }
+    }
+  }, [currentThread?.threadId]); // Only run when thread changes
+
   const getSenderName = (from: string | undefined, isCurrentUser: boolean = false) => {
     if (isCurrentUser) {
       return 'Me';
@@ -122,6 +164,55 @@ export default function EmailDetailPage() {
       return match ? match[1] : emailString;
     }
     return emailString;
+  };
+
+  // Build previous email context for AI
+  const buildPreviousEmailContext = (): string => {
+    if (!currentThread || !currentThread.messages || currentThread.messages.length === 0) {
+      return '';
+    }
+    
+    // Get all messages in chronological order (oldest first)
+    const sortedMessages = currentThread.messages
+      .slice()
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    // Build context string
+    const contextParts = sortedMessages.map((msg) => {
+      const fromField = msg.from_ || msg.from;
+      const isMe = isCurrentUserEmail(fromField);
+      const senderName = getSenderName(fromField, isMe);
+      const timestamp = format(new Date(msg.timestamp), 'MMM d, yyyy h:mm a');
+      
+      // Clean the body
+      let cleanBody = msg.body
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n');
+      
+      // Remove quoted content (simplified version)
+      const lines = cleanBody.split('\n');
+      const contentLines = lines.filter(line => !line.trim().startsWith('>'));
+      cleanBody = contentLines.join('\n').trim();
+      
+      // Fallback to snippet if body is empty
+      if (!cleanBody || cleanBody.length === 0) {
+        cleanBody = msg.snippet
+          .replace(/&#39;/g, "'")
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&');
+      }
+      
+      return `From: ${senderName}\nDate: ${timestamp}\n\n${cleanBody}`;
+    });
+    
+    return contextParts.join('\n\n---\n\n');
   };
 
   const isCurrentUserEmail = (email: string | undefined) => {
@@ -528,16 +619,17 @@ export default function EmailDetailPage() {
           >
             <AIOverlay
               isOpen={showAI}
-            onClose={() => setShowAI(false)}
-            onDraftGenerated={(draft) => {
-              setReplyText(draft);
-              setShowAI(false);
-            }}
-            onDiscardGenerated={() => {
-              setShowAI(false);
-            }}
-            expandable={true}
-          />
+              onClose={() => setShowAI(false)}
+              onDraftGenerated={(draft) => {
+                setReplyText(draft);
+                setShowAI(false);
+              }}
+              onDiscardGenerated={() => {
+                setShowAI(false);
+              }}
+              expandable={true}
+              previousEmailContext={buildPreviousEmailContext()}
+            />
         </div>
       </div>
     )}

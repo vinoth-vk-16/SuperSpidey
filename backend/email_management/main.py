@@ -336,6 +336,7 @@ class SimplifiedEmail(BaseModel):
     timestamp: str  # ISO format string
     isRead: bool
     isSent: bool
+    view_status: Optional[bool] = None  # Whether the email has been viewed/opened (only for app-sent emails)
 
 class ThreadGroup(BaseModel):
     threadId: str
@@ -627,6 +628,10 @@ def fetch_user_emails(user_email: str, page: int = 1, per_page: int = 30):
                 'isRead': email_data.get('isRead', False),
                 'isSent': email_data.get('isSent', False)
             }
+
+            # Only include view_status if it exists (only for emails sent via the app)
+            if 'view_status' in email_data:
+                simplified_email['view_status'] = email_data['view_status']
             thread_groups[thread_id].append(simplified_email)
 
         # Convert thread groups to ThreadGroup objects

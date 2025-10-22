@@ -325,7 +325,15 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
     return cleanFrom.split('@')[0];
   };
 
+  // Check if there are ANY unread messages in the thread
+  const hasUnreadMessages = thread.messages.some(msg => !msg.isRead);
+  
   const latestMessage = thread.messages[0];
+  
+  // Debug logging (remove after testing)
+  if (thread.threadId) {
+    console.log('Thread:', thread.subject, 'Messages:', thread.messages.map(m => ({ id: m.messageId, isRead: m.isRead })), 'hasUnread:', hasUnreadMessages);
+  }
 
   return (
     <div>
@@ -333,7 +341,7 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
       <div
         className={`email-item group cursor-pointer ${
           isSelected ? 'bg-primary/10' : ''
-        } ${!thread.isRead ? 'bg-muted/20' : ''}`}
+        } ${hasUnreadMessages ? 'bg-muted/20' : ''}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={onClick}
@@ -341,36 +349,42 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
         {/* Content with padding */}
         <div className="px-6 py-2.5">
           <div className="flex items-center gap-2 w-full">
-            {/* Checkbox - visible on hover */}
-            <div className={`flex-shrink-0 ${isHovered || isSelected ? 'opacity-100' : 'opacity-0'}`}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSelect(thread.threadId);
-                }}
-                className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-smooth ${
-                  isSelected
-                    ? 'bg-primary border-primary'
-                    : 'border-border hover:border-primary'
-                }`}
-              >
-                {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
-              </button>
-            </div>
+            {/* Unread indicator (violet dot) OR Checkbox on hover */}
+            <div className="flex-shrink-0 w-4 flex items-start justify-center pt-0.5">
+              {hasUnreadMessages && !isHovered && !isSelected ? (
+                <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSelect(thread.threadId);
+                  }}
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-smooth ${
+                    isHovered || isSelected ? 'opacity-100' : 'opacity-0'
+                  } ${
+                    isSelected
+                      ? 'bg-primary border-primary'
+                      : 'border-border hover:border-primary'
+                  }`}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                </button>
+              )}
+              </div>
 
             {/* Sender Name - Left aligned, compact */}
             <div className="flex-shrink-0 w-36">
-              <span className={`text-xs truncate block ${!thread.isRead ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
+              <span className={`text-xs truncate block ${hasUnreadMessages ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}`}>
                 {getSenderName(thread.from_)}
               </span>
             </div>
 
             {/* Subject - Compact width */}
             <div className="flex-shrink-0 w-48">
-              <span className={`text-xs truncate block ${!thread.isRead ? 'font-semibold text-foreground' : 'font-normal text-foreground'}`}>
+              <span className={`text-xs truncate block ${hasUnreadMessages ? 'font-bold text-foreground' : 'font-normal text-muted-foreground'}`}>
                 {thread.subject || '(No subject)'}
               </span>
-            </div>
+          </div>
 
             {/* Separator */}
             <span className="text-xs text-muted-foreground flex-shrink-0 px-1">—</span>
@@ -381,7 +395,7 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
                 {latestMessage.snippet.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
               </p>
             </div>
-
+            
             {/* Thread Count Badge */}
             {thread.messageCount > 1 && (
               <span className="flex-shrink-0 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded ml-2">
@@ -422,7 +436,7 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
-            <Button
+                <Button 
               variant="ghost"
               size="icon"
               onClick={(e) => {
@@ -433,7 +447,7 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
               title="Snooze"
             >
               <Clock className="w-3.5 h-3.5" />
-            </Button>
+                </Button>
             </div>
           </div>
         </div>

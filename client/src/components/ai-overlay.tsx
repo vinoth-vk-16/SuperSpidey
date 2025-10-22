@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowUp, MoreVertical } from 'lucide-react';
 import {
@@ -13,19 +13,28 @@ import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
+interface UserInfo {
+  user_email: string;
+  user_name: string;
+  user_info: string;
+  style: string;
+  found: boolean;
+}
+
 interface AIOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   onDraftGenerated: (draft: string, subject?: string) => void;
   onDiscardGenerated?: () => void;
   expandable?: boolean; // Whether the overlay can expand and doesn't auto-shrink
+  previousEmailContext?: string; // Previous conversation for reply emails
 }
 
 interface AIOverlayRef {
   handleOutsideClick: () => void;
 }
 
-const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, onDraftGenerated, onDiscardGenerated, expandable = false }, ref) => {
+const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, onDraftGenerated, onDiscardGenerated, expandable = false, previousEmailContext }, ref) => {
   const [prompt, setPrompt] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [displayText, setDisplayText] = useState('');
@@ -38,6 +47,41 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
   const { toast } = useToast();
   
   const typeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const userEmail = 'imvinothvk521@gmail.com'; // TODO: Get from auth context
+
+  // Fetch user info for context
+  const { data: userInfoData } = useQuery<UserInfo>({
+    queryKey: ['userInfo', userEmail],
+    queryFn: async () => {
+      const response = await fetch(`https://superspidey-email-management.onrender.com/fetch-user-info/${userEmail}`);
+      if (!response.ok) {
+        return { user_email: userEmail, user_name: '', user_info: '', style: '', found: false };
+      }
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  // Build user context string
+  const buildUserContext = (): string | undefined => {
+    if (!userInfoData || !userInfoData.found) {
+      return undefined;
+    }
+    
+    const parts = [];
+    if (userInfoData.user_name) {
+      parts.push(`Name: ${userInfoData.user_name}`);
+    }
+    if (userInfoData.user_info) {
+      parts.push(`Info: ${userInfoData.user_info}`);
+    }
+    if (userInfoData.style) {
+      parts.push(`Writing style: ${userInfoData.style}`);
+    }
+    
+    return parts.length > 0 ? parts.join(', ') : undefined;
+  };
 
   // Expose handleOutsideClick method through ref
   useImperativeHandle(ref, () => ({
@@ -84,16 +128,32 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
       if (!apiKey) {
         throw new Error('No API key found');
       }
+      
+      const userContext = buildUserContext();
+      
+      // Build request body
+      const requestBody: any = {
+        prompt,
+        api_key: apiKey
+      };
+      
+      // Add user context if available
+      if (userContext) {
+        requestBody.context = userContext;
+      }
+      
+      // Add previous email context if this is a reply
+      if (previousEmailContext) {
+        requestBody.previous_email_context = previousEmailContext;
+      }
+      
       // Call external email management service directly
       const response = await fetch('https://superspidey-email-management.onrender.com/generate-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt,
-          api_key: apiKey
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!response.ok) {
         throw new Error('Failed to generate email draft');
@@ -246,18 +306,33 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
         prompt = `${actionMap[action as keyof typeof actionMap]}\n\n${text}`;
       }
       
+      const userContext = buildUserContext();
+      
+      // Build request body
+      const requestBody: any = {
+        text: text,
+        action: action,
+        api_key: apiKey,
+        custom_prompt: action === 'custom' ? customPrompt : undefined
+      };
+      
+      // Add user context if available
+      if (userContext) {
+        requestBody.context = userContext;
+      }
+      
+      // Add previous email context if this is a reply
+      if (previousEmailContext) {
+        requestBody.previous_email_context = previousEmailContext;
+      }
+      
       // Call external email management service directly
       const response = await fetch('https://superspidey-email-management.onrender.com/improve-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          text: text,
-          action: action,
-          api_key: apiKey,
-          custom_prompt: action === 'custom' ? customPrompt : undefined
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!response.ok) {
         throw new Error('Failed to improve email');

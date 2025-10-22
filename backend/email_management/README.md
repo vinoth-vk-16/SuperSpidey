@@ -93,7 +93,8 @@ Fetch paginated email threads for a user from Firestore, automatically refreshin
           "body": "Full email content...",
           "timestamp": "2024-01-01T12:00:00.000Z",
           "isRead": false,
-          "isSent": false
+          "isSent": false,
+          "view_status": false  // Optional - only present for emails sent via the app
         }
       ]
     }
