@@ -9,6 +9,7 @@ import EditingPanel from '@/components/editing-panel';
 import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import Sidebar from '@/components/sidebar';
 
 export default function ComposePage() {
@@ -25,20 +26,41 @@ export default function ComposePage() {
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const sendEmailMutation = useMutation({
     mutationFn: async (emailData: { to: string; subject: string; body: string }) => {
-      const response = await fetch('/api/gmail/send', {
+      if (!user?.email) {
+        throw new Error('User email not found. Please log in again.');
+      }
+      
+      // Clean and validate email
+      const cleanToEmail = emailData.to.trim();
+      if (!cleanToEmail) {
+        throw new Error('Recipient email is required');
+      }
+      
+      const payload = {
+        user_email: user.email,
+        to_email: cleanToEmail,
+        subject: emailData.subject.trim() || '(No subject)',
+        body: emailData.body.trim(),
+      };
+      
+      console.log('Sending email with payload:', payload);
+      
+      const response = await fetch('https://superspidey-email-management.onrender.com/send-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(emailData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to send email');
+        console.error('Email send error:', error);
+        throw new Error(error.detail || error.error || 'Failed to send email');
       }
 
       return response.json();

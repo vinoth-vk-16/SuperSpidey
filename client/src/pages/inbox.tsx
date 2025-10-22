@@ -1,11 +1,12 @@
 import { useLocation } from 'wouter';
-import { Search, Archive, Trash2, Clock, Check, RotateCcw, RefreshCw } from 'lucide-react';
+import { Search, Archive, Trash2, Clock, Check, RotateCcw, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import Sidebar from '@/components/sidebar';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 interface Message {
   messageId: string;
@@ -18,6 +19,7 @@ interface Message {
   timestamp: string;
   isRead: boolean;
   isSent: boolean;
+  view_status?: boolean; // Optional: only present for emails sent via the app
 }
 
 interface EmailThread {
@@ -36,17 +38,22 @@ export default function InboxPage() {
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: emailData, isLoading, error, refetch } = useQuery({
     queryKey: ['emails', currentPage],
     queryFn: async () => {
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+      
       const response = await fetch('https://superspidey-email-management.onrender.com/fetch-emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_email: 'imvinothvk521@gmail.com',
+          user_email: user.email,
           page: currentPage,
         }),
       });
@@ -61,13 +68,17 @@ export default function InboxPage() {
   // Refresh mutation to sync new emails from Gmail
   const refreshMutation = useMutation({
     mutationFn: async () => {
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+      
       const response = await fetch('https://superspidey-email-management.onrender.com/refresh-emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_email: 'imvinothvk521@gmail.com',
+          user_email: user.email,
         }),
       });
       if (!response.ok) {
@@ -330,6 +341,10 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
   
   const latestMessage = thread.messages[0];
   
+  // Check if this is a sent email with view status tracking
+  const isSentWithTracking = latestMessage.isSent && latestMessage.view_status !== undefined;
+  const hasBeenViewed = latestMessage.view_status === true;
+  
   // Debug logging (remove after testing)
   if (thread.threadId) {
     console.log('Thread:', thread.subject, 'Messages:', thread.messages.map(m => ({ id: m.messageId, isRead: m.isRead })), 'hasUnread:', hasUnreadMessages);
@@ -409,6 +424,23 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
                 {formatDistanceToNow(new Date(thread.timestamp), { addSuffix: true }).replace('about ', '').replace(' ago', '')}
               </span>
             </div>
+
+            {/* View Status - Only for sent emails with tracking */}
+            {isSentWithTracking && (
+              <div className="flex-shrink-0 flex items-center gap-1 ml-3" title={hasBeenViewed ? "Viewed" : "Not viewed yet"}>
+                {hasBeenViewed ? (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-green-600" />
+                    <span className="text-[10px] text-green-600 font-medium">Viewed</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground">Not viewed</span>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Quick Actions - visible on hover */}
             <div className={`email-actions flex items-center gap-0.5 flex-shrink-0 ml-1 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>

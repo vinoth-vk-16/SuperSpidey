@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 interface UserInfo {
   user_email: string;
@@ -45,21 +46,25 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
   const [editPrompt, setEditPrompt] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const typeIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const userEmail = 'imvinothvk521@gmail.com'; // TODO: Get from auth context
 
   // Fetch user info for context
   const { data: userInfoData } = useQuery<UserInfo>({
-    queryKey: ['userInfo', userEmail],
+    queryKey: ['userInfo', user?.email],
     queryFn: async () => {
-      const response = await fetch(`https://superspidey-email-management.onrender.com/fetch-user-info/${userEmail}`);
+      if (!user?.email) {
+        return { user_email: '', user_name: '', user_info: '', style: '', found: false };
+      }
+      
+      const response = await fetch(`https://superspidey-email-management.onrender.com/fetch-user-info/${user.email}`);
       if (!response.ok) {
-        return { user_email: userEmail, user_name: '', user_info: '', style: '', found: false };
+        return { user_email: user.email, user_name: '', user_info: '', style: '', found: false };
       }
       return response.json();
     },
+    enabled: !!user?.email,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 

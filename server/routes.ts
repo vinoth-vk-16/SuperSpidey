@@ -139,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Storing OAuth credentials for user:', user.email);
 
           // Store OAuth credentials in Firestore via the OAuth storage service
-          const storeAuthResponse = await fetch('http://localhost:8000/store-auth', {
+          const storeAuthResponse = await fetch('https://superspidey-oauth.onrender.com/store-auth', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Check if user already has an active Gmail watch before starting a new one
             try {
               console.log('Checking Gmail watch status for user:', user.email);
-              const userCheckResponse = await fetch(`http://localhost:8000/get-auth/${user.email}`);
+              const userCheckResponse = await fetch(`https://superspidey-oauth.onrender.com/get-auth/${user.email}`);
               if (userCheckResponse.ok) {
                 // Check if user has active watch that expires more than 24 hours from now
                 // For now, we'll skip the check and always call start-watch to ensure watch is active
@@ -177,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Start Gmail watch for real-time notifications
             try {
               console.log('Starting Gmail watch for user:', user.email);
-              const startWatchResponse = await fetch('http://localhost:8001/start-watch', {
+              const startWatchResponse = await fetch('https://superspidey-email-management.onrender.com/start-watch', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -282,6 +282,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const formattedBody = formatEmailBody(body);
+      
+      // Generate a temporary message ID for tracking
+      const tempMessageId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Add tracking pixel to the email body
+      const trackingPixel = `<img src="https://superspidey-email-management.onrender.com/track-email-view/${tempMessageId}?user_email=${encodeURIComponent(user.email)}" width="1" height="1" style="display:none;" alt="" />`;
+      const bodyWithTracking = formattedBody + trackingPixel;
 
       // Create email with custom header
       const email = [
@@ -292,7 +299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `Subject: ${subject}`,
         'X-MyApp-ID: ContactSpidey',
         '',
-        formattedBody
+        bodyWithTracking
       ].join('\r\n');
 
       console.log('Sending email with headers:', {

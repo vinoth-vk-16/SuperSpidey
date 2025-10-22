@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Key, ExternalLink, Save, Check, User, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/use-auth';
 import Sidebar from '@/components/sidebar';
 
 type SettingsTab = 'api' | 'user-info';
@@ -45,14 +46,17 @@ export default function SettingsPage() {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  const userEmail = 'imvinothvk521@gmail.com'; // TODO: Get from auth context
+  const { user } = useAuth();
 
   // Fetch user info on mount
   const { data: userInfoData, isLoading: isUserInfoLoading } = useQuery<UserInfo>({
-    queryKey: ['userInfo', userEmail],
+    queryKey: ['userInfo', user?.email],
     queryFn: async () => {
-      const response = await fetch(`https://superspidey-email-management.onrender.com/fetch-user-info/${userEmail}`);
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+      
+      const response = await fetch(`https://superspidey-email-management.onrender.com/fetch-user-info/${user.email}`);
       if (!response.ok) {
         throw new Error('Failed to fetch user info');
       }
@@ -81,6 +85,10 @@ export default function SettingsPage() {
   // Save/Update user info mutation
   const saveUserInfoMutation = useMutation({
     mutationFn: async (data: { user_name: string; user_info: string; style: string }) => {
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+      
       const endpoint = userInfoData?.found 
         ? 'https://superspidey-email-management.onrender.com/update-user-info'
         : 'https://superspidey-email-management.onrender.com/save-user-info';
@@ -91,7 +99,7 @@ export default function SettingsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_email: userEmail,
+          user_email: user.email,
           ...data,
         }),
       });
@@ -102,7 +110,7 @@ export default function SettingsPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userInfo', userEmail] });
+      queryClient.invalidateQueries({ queryKey: ['userInfo', user?.email] });
       toast({
         title: "Success",
         description: userInfoData?.found ? "User information updated successfully" : "User information saved successfully",

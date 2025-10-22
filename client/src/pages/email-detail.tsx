@@ -8,6 +8,7 @@ import Sidebar from '@/components/sidebar';
 import { Textarea } from '@/components/ui/textarea';
 import AIOverlay from '@/components/ai-overlay';
 import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
+import { useAuth } from '@/hooks/use-auth';
 
 interface Message {
   messageId: string;
@@ -45,6 +46,7 @@ export default function EmailDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showAI, setShowAI] = useState(false);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   // AI keyboard shortcut - only when replying
   useKeyboardShortcut(['ctrl', 'u'], () => {
@@ -57,7 +59,9 @@ export default function EmailDetailPage() {
   // Mark email as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (messageIds: string[]) => {
-      const userEmail = 'imvinothvk521@gmail.com';
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
       
       // Mark all messages in the thread as read
       const promises = messageIds.map(msgId =>
@@ -67,7 +71,7 @@ export default function EmailDetailPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            user_email: userEmail,
+            user_email: user.email,
             message_id: msgId,
           }),
         })
@@ -84,13 +88,17 @@ export default function EmailDetailPage() {
   const { data: emailData, isLoading, error } = useQuery({
     queryKey: ['emails', currentPage],
     queryFn: async () => {
+      if (!user?.email) {
+        throw new Error('User not authenticated');
+      }
+      
       const response = await fetch('https://superspidey-email-management.onrender.com/fetch-emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_email: 'imvinothvk521@gmail.com',
+          user_email: user.email,
           page: currentPage,
         }),
       });
@@ -216,9 +224,8 @@ export default function EmailDetailPage() {
   };
 
   const isCurrentUserEmail = (email: string | undefined) => {
-    if (!email) return false;
-    const userEmail = 'imvinothvk521@gmail.com'; // You can get this from auth context
-    return email.toLowerCase().includes(userEmail.toLowerCase());
+    if (!email || !user?.email) return false;
+    return email.toLowerCase().includes(user.email.toLowerCase());
   };
 
   const getRecipientName = (recipients: string[] | string | undefined) => {
@@ -531,23 +538,33 @@ export default function EmailDetailPage() {
                     <div className="pt-4 mt-4 border-t border-border/50 flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <Button
-                          onClick={async () => {
-                            if (!replyText.trim()) return;
-                            
-                            try {
-                              const response = await fetch('https://superspidey-email-management.onrender.com/send-email', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                  user_email: 'imvinothvk521@gmail.com',
-                                  to_email: extractEmailOnly(currentMessage.from_ || currentMessage.from),
-                                  subject: `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`,
-                                  body: replyText,
-                                  thread_id: currentThread?.threadId || currentMessage.threadId, // Include thread ID for replies
-                                }),
-                              });
+                              onClick={async () => {
+                                if (!replyText.trim() || !user?.email) return;
+                                
+                                try {
+                                  const toEmail = extractEmailOnly(currentMessage.from_ || currentMessage.from).trim();
+                                  if (!toEmail) {
+                                    console.error('Invalid recipient email');
+                                    return;
+                                  }
+                                  
+                                  const payload = {
+                                    user_email: user.email,
+                                    to_email: toEmail,
+                                    subject: `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`,
+                                    body: replyText.trim(),
+                                    thread_id: currentThread?.threadId || currentMessage.threadId,
+                                  };
+                                  
+                                  console.log('Sending reply with payload:', payload);
+                                  
+                                  const response = await fetch('https://superspidey-email-management.onrender.com/send-email', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify(payload),
+                                  });
                               
                               if (response.ok) {
                                 console.log('Reply sent successfully');
@@ -555,7 +572,8 @@ export default function EmailDetailPage() {
                                 setReplyText('');
                                 // Optionally refresh the thread
                               } else {
-                                console.error('Failed to send reply');
+                                const error = await response.json();
+                                console.error('Failed to send reply:', error);
                               }
                             } catch (error) {
                               console.error('Error sending reply:', error);

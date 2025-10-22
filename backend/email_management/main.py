@@ -578,6 +578,10 @@ def store_email_in_firestore(user_email: str, message_id: str, email_data: Dict[
             'threadMessagesCount': 1
         }
 
+        # Add view_status if present (for app-sent emails)
+        if 'view_status' in email_data:
+            firestore_email_data['view_status'] = email_data['view_status']
+
         # Add optional fields
         if email_data.get('cc'):
             firestore_email_data['cc'] = email_data['cc']
