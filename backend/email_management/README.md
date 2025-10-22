@@ -38,9 +38,10 @@ Send an email using the user's stored OAuth credentials.
   "to_email": "recipient@example.com",
   "subject": "Email Subject",
   "body": "Email body content",
-  "cc": ["cc@example.com"],           // Optional
-  "bcc": ["bcc@example.com"],         // Optional
-  "thread_id": "thread123"            // Optional - for replying to existing threads
+  "tracker_id": "unique-tracker-12345",  // Required - unique ID from frontend for email tracking
+  "cc": ["cc@example.com"],               // Optional
+  "bcc": ["bcc@example.com"],             // Optional
+  "thread_id": "thread123"                // Optional - for replying to existing threads
 }
 ```
 
@@ -399,28 +400,28 @@ Mark a specific email as read by updating the isRead status from false to true.
 - Returns 404 if the email doesn't exist
 - Useful for marking emails as read in the UI
 
-### GET /track-email-view/{message_id}
-Track email opens/views by updating view_status and logging view data. Returns a 1x1 transparent tracking pixel.
+### GET /track-email-view/{tracker_id}
+Track email opens/views by updating view_status using the unique tracker ID. Returns a 1x1 transparent tracking pixel.
 
 **URL Parameters:**
-- `message_id`: The Gmail message ID to track
+- `tracker_id`: The unique tracker ID sent from frontend during email sending
 
 **Query Parameters:**
-- `user_email` (optional): User's email address for faster lookup
+- `user_email`: The sender's email address (required for efficient querying)
 
 **Example:**
 ```
-GET /track-email-view/18c1b4f2e3d4a5b6?user_email=user@example.com
+GET /track-email-view/unique-tracker-12345?user_email=sender@example.com
 ```
 
 **Response:**
 Returns a 1x1 transparent PNG pixel image.
 
 **Behavior:**
-- Updates `view_status` from `false` to `true`
+- Updates `view_status` from `false` to `true` for the email with matching tracker_id
 - Logs tracking data including IP, user-agent, and timestamp
 - Stores tracking history in `view_tracking` array
-- Works even without `user_email` (searches all users)
+- Queries the specific user's email collection for efficient lookup
 - Always returns pixel image regardless of success/failure
 
 **Tracking Data Stored:**

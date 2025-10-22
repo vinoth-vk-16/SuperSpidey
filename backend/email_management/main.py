@@ -310,6 +310,7 @@ class SendEmailRequest(BaseModel):
     to_email: str
     subject: str
     body: str
+    tracker_id: str  # Unique tracker ID from frontend for email tracking
     bcc: Optional[List[str]] = None
     cc: Optional[List[str]] = None
     thread_id: Optional[str] = None  # For replying to existing threads
@@ -565,6 +566,7 @@ def store_email_in_firestore(user_email: str, message_id: str, email_data: Dict[
         firestore_email_data = {
             'messageId': email_data['messageId'],
             'threadId': email_data.get('threadId', ''),
+            'trackerId': email_data.get('trackerId', ''),  # Store the unique tracker ID
             'from': email_data['from'],
             'to': email_data['to'],
             'subject': email_data['subject'],
@@ -1220,6 +1222,7 @@ async def send_email(request: SendEmailRequest):
             email_data = {
                 'messageId': result['id'],
                 'threadId': result.get('threadId', request.thread_id or ''),
+                'trackerId': request.tracker_id,  # Store the unique tracker ID from frontend
                 'from': request.user_email,
                 'to': [request.to_email],
                 'subject': request.subject,
@@ -1498,9 +1501,9 @@ async def fetch_user_info(user_email: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch user info: {str(e)}")
 
-@app.get("/track-email-view/{message_id}")
-async def track_email_view(message_id: str, request: Request, user_email: Optional[str] = None):
-    """Track email view by updating view_status and logging view data"""
+@app.get("/track-email-view/{tracker_id}")
+async def track_email_view(tracker_id: str, user_email: str, request: Request):
+    """Track email view by updating view_status using tracker_id and logging view data"""
     try:
         # Get tracking data
         ip = request.client.host if request.client else "unknown"
@@ -1514,58 +1517,34 @@ async def track_email_view(message_id: str, request: Request, user_email: Option
             'viewed_at': firestore.SERVER_TIMESTAMP
         }
 
-        # If user_email is provided, update specific email
-        if user_email:
-            # Reference to the specific email document
-            email_ref = db.collection('users').document(user_email).collection('emails').document(message_id)
+        # Query for the specific email with this trackerId in the user's collection
+        emails_ref = db.collection('users').document(user_email).collection('emails')
+        query = emails_ref.where('trackerId', '==', tracker_id).limit(1)
+        matching_emails = query.stream()
 
-            # Check if the email exists
-            email_doc = email_ref.get()
-            if email_doc.exists:
-                # Update view_status and add tracking data
-                email_ref.update({
-                    'view_status': True,
-                    'view_tracking': firestore.ArrayUnion([tracking_data])
-                })
-                print(f"✅ Tracked view for email {message_id} by user {user_email}")
-            else:
-                print(f"⚠️ Email {message_id} not found for user {user_email}")
-        else:
-            # If no user_email provided, try to find the email across all users
-            # This is less efficient but allows for more flexible tracking
-            users_ref = db.collection('users')
-            users = users_ref.stream()
+        found = False
+        for email_doc in matching_emails:
+            # Update view_status and add tracking data
+            email_ref = emails_ref.document(email_doc.id)
+            email_ref.update({
+                'view_status': True,
+                'view_tracking': firestore.ArrayUnion([tracking_data])
+            })
+            print(f"✅ Tracked view for email with tracker {tracker_id} by user {user_email}")
+            found = True
+            break
 
-            found = False
-            for user_doc in users:
-                user_id = user_doc.id
-                email_ref = db.collection('users').document(user_id).collection('emails').document(message_id)
-
-                if email_ref.get().exists:
-                    email_ref.update({
-                        'view_status': True,
-                        'view_tracking': firestore.ArrayUnion([tracking_data])
-                    })
-                    print(f"✅ Tracked view for email {message_id} by user {user_id}")
-                    found = True
-                    break
-
-            if not found:
-                print(f"⚠️ Email {message_id} not found in any user's collection")
+        if not found:
+            print(f"⚠️ Email with tracker {tracker_id} not found for user {user_email}")
 
         # Return a 1x1 transparent pixel
-        # Create a simple 1x1 transparent PNG pixel
         pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
 
-        # For now, return a simple response. In production, you'd return the actual pixel
-        # return FileResponse("path/to/pixel.png", media_type="image/png")
-
-        # Since we don't have a static pixel file, return the pixel data directly
         from fastapi.responses import Response
         return Response(content=pixel_data, media_type="image/png")
 
     except Exception as e:
-        print(f"❌ Error tracking email view for {message_id}: {str(e)}")
+        print(f"❌ Error tracking email view for tracker {tracker_id}: {str(e)}")
         # Still return pixel even on error to not break email tracking
         pixel_data = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
         from fastapi.responses import Response
