@@ -5,6 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import Sidebar from '@/components/sidebar';
+import SpideyChat from '@/components/spidey-chat';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -139,13 +140,15 @@ export default function InboxPage() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex bg-background">
-        <Sidebar />
-        {/* Empty Section */}
-        <div className="w-64 bg-background"></div>
-        {/* Main Content Box */}
-        <div className="flex-1 p-2">
-          <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
+        <div className="h-screen flex bg-background">
+          <Sidebar />
+          {/* Spidey Chat Section */}
+          <div className="w-96 bg-background flex-shrink-0">
+            <SpideyChat className="h-full" />
+          </div>
+          {/* Main Content Box */}
+          <div className="flex-1 p-2 pr-2">
+            <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
             {/* Header Shimmer */}
             <div className="px-6 py-3 border-b border-border">
               <div className="flex items-center justify-between">
@@ -180,13 +183,15 @@ export default function InboxPage() {
 
   if (error) {
     return (
-      <div className="h-screen flex bg-background">
-        <Sidebar />
-        {/* Empty Section */}
-        <div className="w-64 bg-background"></div>
-        {/* Main Content Box */}
-        <div className="flex-1 p-2">
-          <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
+        <div className="h-screen flex bg-background">
+          <Sidebar />
+          {/* Spidey Chat Section */}
+          <div className="w-96 bg-background flex-shrink-0">
+            <SpideyChat className="h-full" />
+          </div>
+          {/* Main Content Box */}
+          <div className="flex-1 p-2 pr-2">
+            <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
           <div className="text-center">
               <div className="text-destructive font-semibold mb-4">Failed to load emails</div>
               <Button onClick={() => refetch()} variant="outline" className="btn-superhuman">
@@ -204,13 +209,13 @@ export default function InboxPage() {
     <div className="h-screen flex bg-background overflow-hidden">
       <Sidebar />
       
-      {/* Empty Section Navigation (like in the reference image) */}
-      <div className="w-64 bg-background flex-shrink-0">
-        {/* This section is intentionally left empty for future navigation */}
+      {/* Spidey Chat Section */}
+      <div className="w-96 bg-background flex-shrink-0">
+        <SpideyChat className="h-full" />
                   </div>
 
       {/* Main Content Box with 8px margin */}
-      <div className="flex-1 p-2">
+      <div className="flex-1 p-2 pr-2">
         <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
           {/* Header with Title and Search */}
           <div className="px-6 py-3 border-b border-border">
@@ -442,7 +447,7 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
-            <Button
+                <Button 
               variant="ghost"
               size="icon"
               onClick={(e) => {
@@ -453,8 +458,8 @@ function EmailThreadItem({ thread, isSelected, onToggleSelect, onClick }: EmailT
               title="Snooze"
             >
               <Clock className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+                </Button>
+            </div>
           </div>
         </div>
       </div>

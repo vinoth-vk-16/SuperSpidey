@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
 import Sidebar from '@/components/sidebar';
+import SpideyChat from '@/components/spidey-chat';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -113,8 +114,10 @@ export default function DraftsPage() {
     return (
       <div className="h-screen flex bg-background">
         <Sidebar />
-        <div className="w-64 bg-background"></div>
-        <div className="flex-1 p-2">
+        <div className="w-96 bg-background flex-shrink-0">
+          <SpideyChat className="h-full" />
+        </div>
+        <div className="flex-1 p-2 pr-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
             <div className="px-6 py-3 border-b border-border">
               <div className="flex items-center justify-between">
@@ -149,8 +152,10 @@ export default function DraftsPage() {
     return (
       <div className="h-screen flex bg-background">
         <Sidebar />
-        <div className="w-64 bg-background"></div>
-        <div className="flex-1 p-2">
+        <div className="w-96 bg-background flex-shrink-0">
+          <SpideyChat className="h-full" />
+        </div>
+        <div className="flex-1 p-2 pr-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">
             <div className="text-center">
               <div className="text-destructive font-semibold mb-4">Failed to load drafts</div>
@@ -169,9 +174,11 @@ export default function DraftsPage() {
     <div className="h-screen flex bg-background overflow-hidden">
       <Sidebar />
       
-      <div className="w-64 bg-background flex-shrink-0"></div>
+      <div className="w-96 bg-background flex-shrink-0">
+        <SpideyChat className="h-full" />
+      </div>
 
-      <div className="flex-1 p-2">
+      <div className="flex-1 p-2 pr-2">
         <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
           <div className="px-6 py-3 border-b border-border">
             <div className="flex items-center justify-between">

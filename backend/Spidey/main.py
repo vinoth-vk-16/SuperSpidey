@@ -12,6 +12,7 @@ import requests
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 from dotenv import load_dotenv
@@ -29,6 +30,15 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI(title="Spidey MCP Server", version="1.0.0", description="Email Automation Agent")
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5000", "https://superspidey-contact-remedy.onrender.com", "*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Configuration
 # EMAIL_MANAGEMENT_BASE_URL is defined in tools.py where it's actually used
