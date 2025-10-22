@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import Sidebar from "@/components/sidebar";
 import InboxPage from "@/pages/inbox";
 import ComposePage from "@/pages/compose";
+import DraftsPage from "@/pages/drafts";
 import SettingsPage from "@/pages/settings";
 import LoginPage from "@/pages/login";
 import EmailDetailPage from "@/pages/email-detail";
@@ -51,6 +52,7 @@ function Router() {
              {isAuthenticated ? (
                <>
                  <Route path="/" component={() => <ProtectedRoute component={InboxPage} />} />
+                 <Route path="/drafts" component={() => <ProtectedRoute component={DraftsPage} />} />
                  <Route path="/compose" component={() => <ProtectedRoute component={ComposePage} />} />
                  <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
                  <Route path="/email/:id" component={() => <ProtectedRoute component={EmailDetailPage} />} />

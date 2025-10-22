@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Sparkles, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,20 +24,69 @@ export default function ComposePage() {
     subject: '',
     body: ''
   });
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  // Load draft if draftId is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const draftId = params.get('draftId');
+    
+    if (draftId && user?.email) {
+      setCurrentDraftId(draftId);
+      // Fetch the draft
+      fetch('https://superspidey-email-management.onrender.com/fetch-drafts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_email: user.email,
+          page: 1,
+        }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          const draft = data.drafts?.find((d: any) => d.draft_id === draftId);
+          if (draft) {
+            setEmailData({
+              to: draft.to_email || '',
+              cc: '',
+              bcc: '',
+              subject: draft.subject || '',
+              body: draft.body || '',
+            });
+          }
+        })
+        .catch(err => console.error('Failed to load draft:', err));
+    }
+  }, [user?.email]);
+
   const sendEmailMutation = useMutation({
     mutationFn: async (emailData: { to: string; subject: string; body: string }) => {
+      // Validation: Check all required fields
       if (!user?.email) {
         throw new Error('User email not found. Please log in again.');
       }
       
-      // Clean and validate email
+      // Validate recipient email (required)
       const cleanToEmail = emailData.to.trim();
       if (!cleanToEmail) {
         throw new Error('Recipient email is required');
+      }
+      
+      // Validate subject (required)
+      const cleanSubject = emailData.subject.trim();
+      if (!cleanSubject) {
+        throw new Error('Subject is required');
+      }
+      
+      // Validate body (required)
+      const cleanBody = emailData.body.trim();
+      if (!cleanBody) {
+        throw new Error('Email body is required');
       }
       
       // Generate unique tracker ID for this email
@@ -46,8 +95,8 @@ export default function ComposePage() {
       const payload = {
         user_email: user.email,
         to_email: cleanToEmail,
-        subject: emailData.subject.trim() || '(No subject)',
-        body: emailData.body.trim(),
+        subject: cleanSubject,
+        body: cleanBody,
         tracker_id: trackerId,
       };
       
@@ -103,6 +152,7 @@ export default function ComposePage() {
   useKeyboardShortcut(['meta', 'u'], () => setShowAI(true), []);
 
   const handleSend = () => {
+    // Validate recipient (required)
     if (!emailData.to.trim()) {
       toast({
         title: "Recipient required",
@@ -112,10 +162,21 @@ export default function ComposePage() {
       return;
     }
 
-    if (!emailData.subject.trim() && !emailData.body.trim()) {
+    // Validate subject (required)
+    if (!emailData.subject.trim()) {
       toast({
-        title: "Content required",
-        description: "Please enter a subject or message.",
+        title: "Subject required",
+        description: "Please enter an email subject.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate body (required)
+    if (!emailData.body.trim()) {
+      toast({
+        title: "Message required",
+        description: "Please enter an email message.",
         variant: "destructive",
       });
       return;
@@ -149,6 +210,28 @@ export default function ComposePage() {
     }));
     setShowAI(false);
   };
+
+  // Auto-save draft when leaving the page
+  useEffect(() => {
+    return () => {
+      // Only save if there's content and user is authenticated
+      if (user?.email && (emailData.to || emailData.subject || emailData.body)) {
+        // Save draft asynchronously
+        fetch('https://superspidey-email-management.onrender.com/create-draft', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_email: user.email,
+            to_email: emailData.to.trim() || undefined,
+            subject: emailData.subject.trim() || undefined,
+            body: emailData.body.trim() || undefined,
+          }),
+        }).catch(err => console.error('Failed to save draft:', err));
+      }
+    };
+  }, [emailData, user?.email]);
 
   return (
     <div className="h-screen flex bg-background overflow-hidden">

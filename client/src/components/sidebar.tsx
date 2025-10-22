@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
-import { Mail, Settings, LogOut, Inbox, SquarePen } from 'lucide-react';
+import { Mail, Settings, LogOut, Inbox, SquarePen, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState } from 'react';
@@ -27,6 +27,7 @@ export default function Sidebar() {
 
   const navItems: NavLink[] = [
     { icon: Mail, label: 'Inbox', path: '/', count: null },
+    { icon: FileText, label: 'Drafts', path: '/drafts', count: null },
     { icon: SquarePen, label: 'Compose', path: '/compose', count: null },
   ];
 

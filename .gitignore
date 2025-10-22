@@ -6,3 +6,4 @@ vite.config.ts.*
 *.tar.gz
 .env
 backend/oauth_storage/access-key.json
+backend/email_management/__pycache__/main.cpython-312.pyc

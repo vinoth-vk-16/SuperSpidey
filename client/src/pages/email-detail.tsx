@@ -557,29 +557,84 @@ export default function EmailDetailPage() {
                       <div className="flex items-center space-x-2">
                         <Button
                               onClick={async () => {
-                                if (!replyText.trim() || !user?.email) return;
+                                // Validation: Check all required fields
+                                if (!user?.email) {
+                                  console.error('User email not found');
+                                  return;
+                                }
+                                
+                                if (!replyText.trim()) {
+                                  console.error('Reply body is required');
+                                  return;
+                                }
+                                
+                                const toEmail = extractEmailOnly(currentMessage.from_ || currentMessage.from).trim();
+                                if (!toEmail) {
+                                  console.error('Recipient email is required');
+                                  return;
+                                }
+                                
+                                const threadId = currentThread?.threadId || currentMessage.threadId;
+                                if (!threadId) {
+                                  console.error('Thread ID is required');
+                                  return;
+                                }
                                 
                                 try {
-                                  const toEmail = extractEmailOnly(currentMessage.from_ || currentMessage.from).trim();
-                                  if (!toEmail) {
-                                    console.error('Invalid recipient email');
-                                    return;
-                                  }
-                                  
                                   // Generate unique tracker ID for this email
                                   const trackerId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                  const replySubject = `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`;
                                   
                                   const payload = {
                                     user_email: user.email,
-                                    thread_id: currentThread?.threadId || currentMessage.threadId,
+                                    thread_id: threadId,
                                     to_email: toEmail,
-                                    subject: `Re: ${(currentThread?.subject || currentMessage.subject || '').replace(/^Re:\s*/i, '')}`,
+                                    subject: replySubject,
                                     body: replyText.trim(),
                                     tracker_id: trackerId,
                                   };
                                   
                                   console.log('Sending reply with payload:', payload);
                                   
+                                  // Optimistically add the reply to UI
+                                  const optimisticReply: Message = {
+                                    messageId: `temp_${trackerId}`,
+                                    threadId: threadId,
+                                    from_: user.email,
+                                    to_: [toEmail],
+                                    subject: replySubject,
+                                    body: replyText.trim(),
+                                    snippet: replyText.trim().substring(0, 100),
+                                    timestamp: new Date().toISOString(),
+                                    isRead: true,
+                                    isSent: true,
+                                    view_status: false,
+                                  };
+                                  
+                                  // Update the query data optimistically
+                                  queryClient.setQueryData(['emails', currentPage], (oldData: any) => {
+                                    if (!oldData) return oldData;
+                                    
+                                    const updatedThreads = oldData.threads.map((thread: EmailThread) => {
+                                      if (thread.threadId === threadId) {
+                                        return {
+                                          ...thread,
+                                          messages: [...thread.messages, optimisticReply],
+                                          messageCount: thread.messageCount + 1,
+                                          timestamp: new Date().toISOString(),
+                                        };
+                                      }
+                                      return thread;
+                                    });
+                                    
+                                    return { ...oldData, threads: updatedThreads };
+                                  });
+                                  
+                                  // Clear reply state immediately
+                                  setIsReplying(false);
+                                  setReplyText('');
+                                  
+                                  // Send to backend
                                   const response = await fetch('https://superspidey-email-management.onrender.com/send-reply-email', {
                                     method: 'POST',
                                     headers: {
@@ -589,19 +644,75 @@ export default function EmailDetailPage() {
                                   });
                               
                               if (response.ok) {
-                                console.log('Reply sent successfully');
-                                setIsReplying(false);
-                                setReplyText('');
-                                // Optionally refresh the thread
+                                const result = await response.json();
+                                console.log('Reply sent successfully:', result);
+                                
+                                // Update the temp message with real message ID
+                                queryClient.setQueryData(['emails', currentPage], (oldData: any) => {
+                                  if (!oldData) return oldData;
+                                  
+                                  const updatedThreads = oldData.threads.map((thread: EmailThread) => {
+                                    if (thread.threadId === threadId) {
+                                      const updatedMessages = thread.messages.map((msg: Message) => {
+                                        if (msg.messageId === `temp_${trackerId}`) {
+                                          return { ...msg, messageId: result.message_id };
+                                        }
+                                        return msg;
+                                      });
+                                      return { ...thread, messages: updatedMessages };
+                                    }
+                                    return thread;
+                                  });
+                                  
+                                  return { ...oldData, threads: updatedThreads };
+                                });
                               } else {
                                 const error = await response.json();
                                 console.error('Failed to send reply:', error);
+                                
+                                // Remove optimistic reply on error
+                                queryClient.setQueryData(['emails', currentPage], (oldData: any) => {
+                                  if (!oldData) return oldData;
+                                  
+                                  const updatedThreads = oldData.threads.map((thread: EmailThread) => {
+                                    if (thread.threadId === threadId) {
+                                      return {
+                                        ...thread,
+                                        messages: thread.messages.filter((msg: Message) => msg.messageId !== `temp_${trackerId}`),
+                                        messageCount: thread.messageCount - 1,
+                                      };
+                                    }
+                                    return thread;
+                                  });
+                                  
+                                  return { ...oldData, threads: updatedThreads };
+                                });
                               }
                             } catch (error) {
                               console.error('Error sending reply:', error);
+                              
+                              // Remove optimistic reply on error
+                              queryClient.setQueryData(['emails', currentPage], (oldData: any) => {
+                                if (!oldData) return oldData;
+                                
+                                const threadId = currentThread?.threadId || currentMessage.threadId;
+                                const trackerId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                
+                                const updatedThreads = oldData.threads.map((thread: EmailThread) => {
+                                  if (thread.threadId === threadId) {
+                                    return {
+                                      ...thread,
+                                      messages: thread.messages.filter((msg: Message) => !msg.messageId.startsWith('temp_')),
+                                    };
+                                  }
+                                  return thread;
+                                });
+                                
+                                return { ...oldData, threads: updatedThreads };
+                              });
                             }
                           }}
-                          disabled={!replyText.trim()}
+                          disabled={!replyText.trim() || !user?.email}
                           className="btn-superhuman bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
                           Send

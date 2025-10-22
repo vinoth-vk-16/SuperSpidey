@@ -371,6 +371,13 @@ class FetchDraftsResponse(BaseModel):
     page: int
     has_more: bool
 
+class UpdateDraftRequest(BaseModel):
+    user_email: str
+    draft_id: str
+    to_email: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+
 class FetchEmailsRequest(BaseModel):
     user_email: str
     page: int = 1  # Page number starting from 1
@@ -1434,15 +1441,20 @@ async def create_draft(request: CreateDraftRequest):
 
         # Prepare draft data
         draft_data = {
-            'to_email': request.to_email,
-            'subject': request.subject,
-            'body': request.body,
             'created_at': firestore.SERVER_TIMESTAMP,
             'updated_at': firestore.SERVER_TIMESTAMP
         }
 
-        # Store draft in Firestore: users/{user_email}/drafts/{draft_id}/content
-        draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(draft_id).collection('content').document('data')
+        # Only include fields that are provided (since they're optional)
+        if request.to_email is not None:
+            draft_data['to_email'] = request.to_email
+        if request.subject is not None:
+            draft_data['subject'] = request.subject
+        if request.body is not None:
+            draft_data['body'] = request.body
+
+        # Store draft directly in Firestore: users/{user_email}/drafts/{draft_id}
+        draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(draft_id)
         draft_ref.set(draft_data)
 
         return DraftResponse(
@@ -1478,8 +1490,8 @@ async def create_multi_draft(request: CreateMultiDraftRequest):
                     'updated_at': firestore.SERVER_TIMESTAMP
                 }
 
-                # Store draft in Firestore: users/{user_email}/drafts/{draft_id}/content
-                draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(draft_id).collection('content').document('data')
+                # Store draft directly in Firestore: users/{user_email}/drafts/{draft_id}
+                draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(draft_id)
                 draft_ref.set(draft_data)
 
                 draft_ids.append(draft_id)
@@ -1534,23 +1546,22 @@ async def fetch_drafts(request: FetchDraftsRequest):
         drafts = []
         for draft_id in paginated_draft_ids:
             try:
-                # Get the content data for this draft
-                content_ref = drafts_ref.document(draft_id).collection('content').document('data')
-                content_doc = content_ref.get()
+                # Get the draft data directly from the document
+                draft_doc = drafts_ref.document(draft_id).get()
 
-                if content_doc.exists:
-                    content_data = content_doc.to_dict()
+                if draft_doc.exists:
+                    draft_data = draft_doc.to_dict()
                     draft_item = DraftItem(
                         draft_id=draft_id,
-                        to_email=content_data.get('to_email'),
-                        subject=content_data.get('subject'),
-                        body=content_data.get('body'),
-                        created_at=content_data.get('created_at').isoformat() if content_data.get('created_at') and hasattr(content_data.get('created_at'), 'isoformat') else str(content_data.get('created_at', '')),
-                        updated_at=content_data.get('updated_at').isoformat() if content_data.get('updated_at') and hasattr(content_data.get('updated_at'), 'isoformat') else str(content_data.get('updated_at', ''))
+                        to_email=draft_data.get('to_email'),
+                        subject=draft_data.get('subject'),
+                        body=draft_data.get('body'),
+                        created_at=draft_data.get('created_at').isoformat() if draft_data.get('created_at') and hasattr(draft_data.get('created_at'), 'isoformat') else str(draft_data.get('created_at', '')),
+                        updated_at=draft_data.get('updated_at').isoformat() if draft_data.get('updated_at') and hasattr(draft_data.get('updated_at'), 'isoformat') else str(draft_data.get('updated_at', ''))
                     )
                     drafts.append(draft_item)
                 else:
-                    # Draft exists but no content - create minimal entry
+                    # Draft document doesn't exist - create minimal entry
                     draft_item = DraftItem(
                         draft_id=draft_id,
                         to_email=None,
@@ -1580,6 +1591,37 @@ async def fetch_drafts(request: FetchDraftsRequest):
         raise
     except Exception as e:
         print(f"Unexpected error in fetch-drafts: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.put("/update-draft")
+async def update_draft(request: UpdateDraftRequest):
+    """Update an existing email draft for a user in Firestore"""
+    try:
+        # Store draft directly in the drafts collection (simplified structure)
+        draft_ref = db.collection('users').document(request.user_email).collection('drafts').document(request.draft_id)
+
+        # Prepare update data - only include fields that are provided
+        update_data = {'updated_at': firestore.SERVER_TIMESTAMP}
+
+        if request.to_email is not None:
+            update_data['to_email'] = request.to_email
+        if request.subject is not None:
+            update_data['subject'] = request.subject
+        if request.body is not None:
+            update_data['body'] = request.body
+
+        # Update the draft document
+        draft_ref.update(update_data)
+
+        return {
+            "user_email": request.user_email,
+            "draft_id": request.draft_id,
+            "success": True,
+            "message": "Draft updated successfully"
+        }
+
+    except Exception as e:
+        print(f"Unexpected error in update-draft: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/fetch-emails")

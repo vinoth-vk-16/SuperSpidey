@@ -114,7 +114,7 @@ Create a single email draft and store it in Firestore.
 }
 ```
 
-**Storage:** `users/{user_email}/drafts/{draft_id}/content/data`
+**Storage:** `users/{user_email}/drafts/{draft_id}`
 
 **Error Responses:**
 - `500`: Failed to create draft
@@ -159,7 +159,7 @@ Create multiple email drafts at once and store them in Firestore.
 }
 ```
 
-**Storage:** Each draft stored as `users/{user_email}/drafts/{draft_id}/content/data`
+**Storage:** Each draft stored directly as `users/{user_email}/drafts/{draft_id}`
 
 **Error Responses:**
 - `500`: Failed to create drafts
@@ -212,6 +212,43 @@ Fetch paginated email drafts for a user from Firestore (30 drafts per page).
 **Error Responses:**
 - `400`: Invalid page number (must be 1 or greater)
 - `500`: Failed to fetch drafts
+
+### PUT /update-draft
+Update an existing email draft for a user in Firestore.
+
+**Request Body:**
+```json
+{
+  "user_email": "user@example.com",
+  "draft_id": "550e8400-e29b-41d4-a716-446655440000",
+  "to_email": "recipient@example.com",
+  "subject": "Updated Draft Subject",
+  "body": "Updated draft content..."
+}
+```
+
+**Parameters:**
+- `user_email`: User's email address (required)
+- `draft_id`: Unique identifier for the draft (required)
+- `to_email`, `subject`, `body`: Fields to update (all optional - only provided fields will be updated)
+
+**Response:**
+```json
+{
+  "user_email": "user@example.com",
+  "draft_id": "550e8400-e29b-41d4-a716-446655440000",
+  "success": true,
+  "message": "Draft updated successfully"
+}
+```
+
+**Behavior:**
+- Only updates fields that are provided in the request
+- Automatically updates `updated_at` timestamp
+- All fields are optional except `user_email` and `draft_id`
+
+**Error Responses:**
+- `500`: Failed to update draft
 
 ### POST /fetch-emails
 Fetch paginated email threads for a user from Firestore, automatically refreshing from Gmail first to ensure latest data.
