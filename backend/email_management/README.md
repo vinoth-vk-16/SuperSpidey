@@ -113,6 +113,7 @@ Fetch paginated email threads for a user from Firestore, automatically refreshin
 - Thread-level read status (true if all messages in thread are read)
 - Simplified email structure for frontend display
 - **Auto-refresh**: Automatically syncs with Gmail before fetching to ensure latest emails
+- **View Status Tracking**: Optional `view_status` field for emails sent via the app (indicates if opened)
 
 ### POST /refresh-emails
 Refresh emails for a user from Gmail API after the lastSyncTimestamp, filtering by custom header.
