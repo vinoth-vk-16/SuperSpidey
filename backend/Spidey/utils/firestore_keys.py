@@ -4,6 +4,7 @@ Firestore key management utilities for fetching encrypted API keys
 
 import os
 import logging
+import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from typing import Optional, Dict
@@ -18,28 +19,35 @@ _db = None
 def initialize_firestore():
     """Initialize Firebase Admin SDK and Firestore client"""
     global _db
-    
+
     if _db is not None:
         return _db
-    
+
     try:
         # Check if Firebase is already initialized
         firebase_admin.get_app()
         logger.info("Firebase already initialized")
     except ValueError:
         # Initialize Firebase
-        service_key_path = os.getenv("service_key")
-        
-        if not service_key_path:
+        service_key_value = os.getenv("service_key")
+
+        if not service_key_value:
             raise ValueError("service_key environment variable not set")
-        
-        if not os.path.exists(service_key_path):
-            raise FileNotFoundError(f"Firebase service key not found at: {service_key_path}")
-        
-        cred = credentials.Certificate(service_key_path)
-        firebase_admin.initialize_app(cred)
-        logger.info("Firebase initialized successfully")
-    
+
+        try:
+            # Parse as JSON string (works for both local and production)
+            firebase_credentials = json.loads(service_key_value)
+            cred = credentials.Certificate(firebase_credentials)
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized successfully from JSON string")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in service_key: {str(e)}")
+            raise ValueError("service_key must contain valid JSON")
+        except Exception as e:
+            logger.error(f"Failed to initialize Firebase: {str(e)}")
+            raise
+
     _db = firestore.client()
     logger.info("Firestore client initialized")
     return _db

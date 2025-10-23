@@ -83,8 +83,8 @@ Spidey/
 
 3. **Environment Setup**:
    ```bash
-   # Required: Firebase service key path
-   export FIREBASE_SERVICE_KEY_PATH=/path/to/access-key.json
+   # Required: Firebase service account JSON (as string)
+   export service_key='{"type": "service_account", "project_id": "...", ...}'
 
    # Required: Fernet encryption key (generate using cryptography.fernet.Fernet.generate_key())
    export ENCRYPTION_KEY='your_fernet_key_here'
@@ -103,8 +103,8 @@ Spidey/
       key = Fernet.generate_key().decode()
       print(f"ENCRYPTION_KEY={key}")
       ```
-   2. Download Firebase service key from Firebase Console
-   3. Add both to your `.env` file
+   2. Get Firebase service account JSON from Firebase Console
+   3. Set as environment variable (see examples below)
 
 ## 🎯 Usage
 
@@ -351,7 +351,7 @@ python main.py
 ```
 
 **Environment Variables** (Required):
-- `FIREBASE_SERVICE_KEY_PATH`: Path to Firebase service account key (upload as secret file)
+- `service_key`: Firebase service account JSON (as environment variable)
 - `ENCRYPTION_KEY`: Fernet encryption key (generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
 
 **Environment Variables** (Optional):
@@ -372,12 +372,12 @@ The LangChain agent framework provides:
 
 Before testing, ensure you have:
 
-1. **Firebase Setup**: Service account key and Firestore access
+1. **Firebase Setup**: Service account JSON and Firestore access
 2. **Encryption Key**: Generated with Fernet (see installation steps above)
 3. **API Keys**: Encrypted and stored in Firestore using oauth_storage service
 4. **Environment Variables**:
    ```bash
-   export FIREBASE_SERVICE_KEY_PATH=/path/to/access-key.json
+   export service_key='{"type": "service_account", ...}'
    export ENCRYPTION_KEY='your_fernet_key_here'
    export EMAIL_MANAGEMENT_BASE_URL=https://superspidey-email-management.onrender.com
    ```

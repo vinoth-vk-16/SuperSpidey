@@ -22,6 +22,13 @@ from tools import create_email_drafts_tool
 from utils.helpers import sanitize_input, validate_email
 from utils.firestore_keys import fetch_api_key, initialize_firestore
 
+# Configure logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Load environment variables
 load_dotenv()
 
@@ -31,13 +38,6 @@ try:
     logger.info("Firestore initialized successfully on startup")
 except Exception as e:
     logger.warning(f"Firestore initialization skipped: {str(e)}")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI(

@@ -59,12 +59,12 @@ def test_invoke(task, user_email="test@example.com", context=None, previous_conv
     print_separator(f"🕷️ Testing: '{task}'")
 
     # Check if we have the necessary environment variables for the chosen key type
-    required_env_vars = ["FIREBASE_SERVICE_KEY_PATH", "ENCRYPTION_KEY"]
+    required_env_vars = ["service_key", "ENCRYPTION_KEY"]
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 
     if missing_vars:
         print(f"⚠️ Missing required environment variables: {', '.join(missing_vars)}")
-        print("Please set FIREBASE_SERVICE_KEY_PATH and ENCRYPTION_KEY in .env")
+        print("Please set service_key and ENCRYPTION_KEY in .env")
         return
 
     # Check if user has the required key type stored in Firestore
@@ -169,7 +169,7 @@ def main():
     print(f"\nNote: Testing with {TEST_KEY_TYPE.upper()}")
     print("For full functionality, ensure:")
     print("1. Spidey server is running on port 8004")
-    print("2. FIREBASE_SERVICE_KEY_PATH and ENCRYPTION_KEY are set in .env")
+    print("2. service_key and ENCRYPTION_KEY are set in .env")
     print(f"3. Test user has {TEST_KEY_TYPE} stored in Firestore")
     print("4. Email management service is accessible")
     print("\nTo switch testing modes:")

@@ -1,27 +1,29 @@
 # Core Framework
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.5.0
-python-dotenv>=1.0.0
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
 
 # LangChain Framework (compatible versions)
-langchain>=0.2.0,<0.3.0
-langchain-core>=0.2.0,<0.3.0
-langchain-google-genai>=1.0.0
-langchain-openai>=0.1.0
+langchain
+langchain-core
+langchain-google-genai
+langchain-openai
 
 # AI Models
-google-generativeai>=0.3.0
-openai>=1.0.0
+google-generativeai
+openai
 
 # Firebase
-firebase-admin>=6.0.0
+firebase-admin
 
 # Encryption
-cryptography>=41.0.0
+cryptography
 
 # HTTP and utilities
-requests>=2.31.0
+requests
 
 # Production server
-gunicorn>=21.2.0
+gunicorn
+
+l
