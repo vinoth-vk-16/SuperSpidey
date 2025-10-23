@@ -246,7 +246,8 @@ async def invoke_spidey(request: SpideyRequest):
         logger.info(f"Invoking agent with task: {task[:100]}...")
         result = agent.invoke(
             user_input=full_input,
-            chat_history=chat_history
+            chat_history=chat_history,
+            user_email=user_email
         )
         
         # Process the agent's response

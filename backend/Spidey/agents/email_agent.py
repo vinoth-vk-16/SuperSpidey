@@ -105,16 +105,72 @@ class SpideyAgent:
         logger.info(f"Spidey Agent initialized with key_type: {key_type} using LangGraph")
 
     def _create_graph(self):
-        """Create the LangGraph workflow with manual tool orchestration"""
+        """Create the LangGraph workflow with tool execution"""
         
-        def call_model(state: AgentState):
-            """Node that calls the LLM"""
+        def call_model_and_execute_tools(state: AgentState):
+            """Node that calls the LLM and optionally executes tools"""
             messages = state["messages"]
+            user_email = state.get("user_email", "")
             
-            # Build a conversational prompt with tool information
+            # Get the last user message
+            last_user_msg = ""
+            for msg in reversed(messages):
+                if isinstance(msg, HumanMessage):
+                    last_user_msg = msg.content
+                    break
+            
+            # Check if this is a draft creation request
+            draft_keywords = ['create', 'write', 'draft', 'generate', 'make', 'compose']
+            email_keywords = ['email', 'draft', 'message']
+            
+            is_draft_request = any(keyword in last_user_msg.lower() for keyword in draft_keywords) and \
+                              any(keyword in last_user_msg.lower() for keyword in email_keywords)
+            
+            # If it's a draft request and we have the user's email, try to execute the tool
+            if is_draft_request and user_email and '@gmail.com' in last_user_msg.lower():
+                try:
+                    # Extract recipient emails from the message
+                    import re
+                    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+                    recipient_emails = re.findall(email_pattern, last_user_msg)
+                    
+                    # Filter out the user's own email
+                    recipient_emails = [email for email in recipient_emails if email != user_email]
+                    
+                    if recipient_emails:
+                        # Build drafts array
+                        drafts = []
+                        for recipient in recipient_emails:
+                            drafts.append({
+                                "user_email": user_email,
+                                "to_email": recipient,
+                                "subject": f"Professional Outreach to {recipient.split('@')[0].title()}",
+                                "body": f"Hi {recipient.split('@')[0].title()},\n\nI hope this email finds you well. I wanted to reach out regarding potential collaboration opportunities.\n\nBest regards"
+                            })
+                        
+                        # Execute the tool
+                        tool_input = {
+                            "user_email": user_email,
+                            "drafts": drafts
+                        }
+                        
+                        tool_result = self.tools[0].func(**tool_input)
+                        
+                        # Return success response
+                        response_text = f"✅ Successfully created {len(drafts)} email draft(s) for you!\n📝 Recipients: {', '.join(recipient_emails)}"
+                        return {
+                            "messages": [AIMessage(content=response_text)],
+                            "tool_executed": True,
+                            "tool_result": tool_result
+                        }
+                        
+                except Exception as e:
+                    logger.error(f"Error executing tool: {str(e)}")
+                    # Fall through to normal LLM response
+            
+            # Normal conversational response
             tools_desc = "\n".join([f"- {tool.name}: {tool.description}" for tool in self.tools])
             
-            # Create the full prompt
             prompt = f"""{SPIDEY_SYSTEM_PROMPT}
 
 Available tools:
@@ -123,11 +179,20 @@ Available tools:
 Conversation history:
 {self._format_messages(messages)}
 
-Respond naturally to the user. If they ask to create/write/draft/generate emails, use the create_email_drafts tool."""
+User's email: {user_email if user_email else 'not provided'}
+
+When the user asks to create email drafts, you need their email address (user_email) and the recipient email addresses. If you have both, tell them you can create the drafts. Otherwise, ask for the missing information.
+
+Remember: Only use tools when explicitly asked to CREATE/WRITE/DRAFT emails."""
             
             try:
                 response = self.llm.invoke(prompt)
                 response_text = response.content if hasattr(response, 'content') else str(response)
+                
+                # Handle case where response might be a list
+                if isinstance(response_text, list):
+                    response_text = "\n".join(str(item) for item in response_text)
+                
                 return {"messages": [AIMessage(content=response_text)]}
             except Exception as e:
                 error_msg = f"Error calling LLM: {str(e)}"
@@ -143,11 +208,11 @@ Respond naturally to the user. If they ask to create/write/draft/generate emails
                 
                 return {"messages": [error_response], "error": error_msg}
 
-        # Create the graph (simple single-node for now)
+        # Create the graph
         workflow = StateGraph(AgentState)
 
         # Add the agent node
-        workflow.add_node("agent", call_model)
+        workflow.add_node("agent", call_model_and_execute_tools)
 
         # Set the entry point
         workflow.set_entry_point("agent")
@@ -168,13 +233,14 @@ Respond naturally to the user. If they ask to create/write/draft/generate emails
                 formatted.append(f"Spidey: {msg.content}")
         return "\n".join(formatted)
 
-    def invoke(self, user_input: str, chat_history: str = "") -> Dict[str, Any]:
+    def invoke(self, user_input: str, chat_history: str = "", user_email: str = "") -> Dict[str, Any]:
         """
         Invoke the agent with user input.
 
         Args:
             user_input: The user's message/request
             chat_history: Optional previous conversation context
+            user_email: User's email address for tool execution
 
         Returns:
             Dictionary with agent response and metadata
@@ -198,7 +264,7 @@ Respond naturally to the user. If they ask to create/write/draft/generate emails
             # Prepare initial state
             initial_state = AgentState(
                 messages=messages,
-                user_email="",
+                user_email=user_email,
                 key_type=self.key_type,
                 api_key=self.api_key,
                 error=None
@@ -213,11 +279,16 @@ Respond naturally to the user. If they ask to create/write/draft/generate emails
             
             response_text = last_message.content if hasattr(last_message, 'content') else str(last_message)
 
+            # Check if a tool was executed
+            tool_executed = final_state.get("tool_executed", False)
+            tool_result = final_state.get("tool_result", {})
+
             return {
                 "success": not bool(final_state.get("error")),
                 "response": response_text,
-                "action_taken": "agent_execution",
-                "intermediate_steps": []
+                "action_taken": "tool_execution" if tool_executed else "agent_execution",
+                "intermediate_steps": [],
+                "tool_result": tool_result if tool_executed else None
             }
 
         except Exception as e:

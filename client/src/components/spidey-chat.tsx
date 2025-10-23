@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string;
@@ -131,7 +132,12 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
       }
 
       const data = await response.json();
-      
+
+      // Check if the API response indicates success
+      if (!data.success) {
+        throw new Error(data.message || 'API request was not successful');
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -140,7 +146,7 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      
+
       // Update conversation history
       const newHistory = `${conversationHistory}\nUser: ${inputValue}\nAssistant: ${assistantMessage.content}`;
       setConversationHistory(newHistory);
@@ -151,6 +157,17 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
           title: "Drafts created!",
           description: `${data.drafts_created} email draft${data.drafts_created > 1 ? 's' : ''} created successfully`,
         });
+      }
+
+      // Log action taken for debugging
+      if (data.action_taken) {
+        console.log('Spidey action taken:', data.action_taken);
+      }
+
+      // Handle draft IDs if provided (for future use)
+      if (data.draft_ids && Array.isArray(data.draft_ids)) {
+        console.log('Draft IDs created:', data.draft_ids);
+        // Could store these for navigation or other features
       }
     } catch (error) {
       console.error('Spidey API error:', error);
@@ -255,7 +272,36 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
                       : 'bg-[#1a1a1a] text-foreground'
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                  {message.role === 'assistant' ? (
+                    <div className="text-sm prose prose-sm prose-invert max-w-none">
+                      <ReactMarkdown
+                        components={{
+                          strong: ({ children }) => (
+                            <strong className="font-semibold text-foreground">{children}</strong>
+                          ),
+                          em: ({ children }) => (
+                            <em className="italic text-muted-foreground">{children}</em>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc list-inside space-y-1 ml-2">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal list-inside space-y-1 ml-2">{children}</ol>
+                          ),
+                          li: ({ children }) => (
+                            <li className="leading-relaxed">{children}</li>
+                          ),
+                          p: ({ children }) => (
+                            <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                          ),
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                  )}
                 </div>
               </div>
             ))}
