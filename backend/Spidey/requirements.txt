@@ -5,10 +5,10 @@ python-dotenv
 
 # LangChain and related packages
 langchain
-langchain-core==0.2.0
-langchain-google-genai==1.0.1
+langchain-core
+langchain-google-genai
 langchain-openai
-langgraph==0.3.1
+langgraph
 
 # AI Models
 google-generativeai
