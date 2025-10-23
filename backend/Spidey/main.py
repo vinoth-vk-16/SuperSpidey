@@ -164,7 +164,8 @@ def process_with_gemini(gemini_api_key: str, user_input: str, user_email: str, p
         
         # Try multiple models with fallback (more robust approach)
         model_names = [
-            'gemini-2.0-flash',      # More stable model first
+            'gemini-2.5-flash', 
+            'gemini-2.0-flash'     # More stable model first
             'gemini-2.5-flash-lite'       # Pro model as backup
         ]
 
