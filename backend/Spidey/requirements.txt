@@ -1,17 +1,16 @@
-# Core Framework
 fastapi
 uvicorn[standard]
 pydantic
 python-dotenv
 
-# LangChain Framework (pinned to working versions)
-langchain
+# LangChain and related packages
+langchain==2.1.12
 langchain-core==0.2.0
-langchain-google-genai==0.2.0
-langchain-openai
-langgraph
+langchain-google-genai==2.1.12
+langchain-openai==0.4.3
+langgraph==0.3.1
 
-# AI Models (compatible versions)
+# AI Models
 google-generativeai
 openai
 
