@@ -1,20 +1,33 @@
 """
-Email Agent - LangChain ReAct Agent for email automation
+Email Agent - LangGraph-based Agent for email automation
 """
 
 import logging
-from typing import Any, Dict, List, Optional
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
+import re
+import json
+from typing import Any, Dict, List, Optional, Literal, Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+from langchain.tools import BaseTool
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 from .model_factory import create_llm_from_key_type
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-# Spidey System Prompt for LangChain Agent
-SPIDEY_AGENT_PROMPT = """You are Spidey, a friendly email assistant who helps people with all their email needs!
+# Define the state structure for LangGraph
+class AgentState(TypedDict):
+    messages: List[BaseMessage]
+    user_email: str
+    key_type: str
+    api_key: str
+    error: Optional[str]
+
+
+# Spidey System Prompt
+SPIDEY_SYSTEM_PROMPT = """You are Spidey, a friendly email assistant who helps people with all their email needs!
 
 When greeting users, respond with: 👋 Hi! I'm Spidey, your email buddy. I love helping with emails - whether you need to write professional outreach emails, apply for jobs, or just get better at email communication.
 
@@ -44,49 +57,26 @@ When greeting users, respond with: 👋 Hi! I'm Spidey, your email buddy. I love
 - For questions like "How do I...", "What should I...", "Give me tips..." - respond directly WITHOUT using tools
 - If user just greets you (hi, hello, hey), respond with a friendly introduction WITHOUT using tools
 
-Remember: I'm here to make your email life easier! 😊
-
-You have access to the following tools:
-
-{tools}
-
-Use the following format:
-
-Question: the input question or request from the user
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Previous conversation:
-{chat_history}
-
-Question: {input}
-Thought: {agent_scratchpad}"""
+Remember: I'm here to make your email life easier! 😊"""
 
 
 class SpideyAgent:
     """
-    Spidey Email Agent using LangChain's ReAct framework
+    Spidey Email Agent using LangGraph with tool-calling capabilities
     """
-    
+
     def __init__(
-        self, 
+        self,
         api_key: str,
         key_type: str,
-        tools: List[Any],
+        tools: List[BaseTool],
         temperature: float = 0.7,
         max_iterations: int = 5,
         verbose: bool = True
     ):
         """
         Initialize the Spidey Agent.
-        
+
         Args:
             api_key: API key for the LLM provider
             key_type: Type of key ('gemini_api_key' or 'deepseek_v3_key')
@@ -101,157 +91,162 @@ class SpideyAgent:
         self.temperature = temperature
         self.max_iterations = max_iterations
         self.verbose = verbose
-        
-        # Initialize the LLM based on key type
-        self.llm = self._initialize_llm()
-        
-        # Create the agent
-        self.agent = self._create_agent()
-        
-        # Create the agent executor
-        self.agent_executor = self._create_executor()
-        
-        logger.info(f"Spidey Agent initialized with key_type: {key_type}")
-    
-    def _initialize_llm(self):
-        """Initialize the LLM based on key type"""
-        try:
-            llm = create_llm_from_key_type(
-                api_key=self.api_key,
-                key_type=self.key_type,
-                temperature=self.temperature
-            )
-            return llm
-        except Exception as e:
-            logger.error(f"Failed to initialize LLM: {str(e)}")
-            raise
-    
-    def _create_agent(self):
-        """Create the ReAct agent with custom prompt"""
-        prompt = PromptTemplate(
-            template=SPIDEY_AGENT_PROMPT,
-            input_variables=["input", "agent_scratchpad", "chat_history"],
-            partial_variables={
-                "tools": "\n".join([f"- {tool.name}: {tool.description}" for tool in self.tools]),
-                "tool_names": ", ".join([tool.name for tool in self.tools])
-            }
+
+        # Initialize LLM
+        self.llm = create_llm_from_key_type(
+            api_key=api_key,
+            key_type=key_type,
+            temperature=temperature
         )
+
+        # Create the LangGraph workflow
+        self.graph = self._create_graph()
+
+        logger.info(f"Spidey Agent initialized with key_type: {key_type} using LangGraph")
+
+    def _create_graph(self):
+        """Create the LangGraph workflow with manual tool orchestration"""
         
-        agent = create_react_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=prompt
-        )
-        
-        return agent
+        def call_model(state: AgentState):
+            """Node that calls the LLM"""
+            messages = state["messages"]
+            
+            # Build a conversational prompt with tool information
+            tools_desc = "\n".join([f"- {tool.name}: {tool.description}" for tool in self.tools])
+            
+            # Create the full prompt
+            prompt = f"""{SPIDEY_SYSTEM_PROMPT}
+
+Available tools:
+{tools_desc}
+
+Conversation history:
+{self._format_messages(messages)}
+
+Respond naturally to the user. If they ask to create/write/draft/generate emails, use the create_email_drafts tool."""
+            
+            try:
+                response = self.llm.invoke(prompt)
+                response_text = response.content if hasattr(response, 'content') else str(response)
+                return {"messages": [AIMessage(content=response_text)]}
+            except Exception as e:
+                error_msg = f"Error calling LLM: {str(e)}"
+                logger.error(error_msg)
+                
+                # Provide user-friendly error messages
+                if "API_KEY_INVALID" in str(e) or "API key not valid" in str(e):
+                    error_response = AIMessage(content="Sorry, there seems to be an issue with the API configuration. Please check that your API key is valid.")
+                elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
+                    error_response = AIMessage(content="I'm a bit overwhelmed right now! The API quota has been reached. Please try again in a few minutes.")
+                else:
+                    error_response = AIMessage(content="Oops! Something went wrong on my end. Let me try to help you differently. What specifically do you need help with?")
+                
+                return {"messages": [error_response], "error": error_msg}
+
+        # Create the graph (simple single-node for now)
+        workflow = StateGraph(AgentState)
+
+        # Add the agent node
+        workflow.add_node("agent", call_model)
+
+        # Set the entry point
+        workflow.set_entry_point("agent")
+
+        # End after agent response
+        workflow.add_edge("agent", END)
+
+        # Compile the graph
+        return workflow.compile()
     
-    def _create_executor(self) -> AgentExecutor:
-        """Create the agent executor"""
-        memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=False,
-            input_key="input",
-            output_key="output"
-        )
-        
-        executor = AgentExecutor(
-            agent=self.agent,
-            tools=self.tools,
-            memory=memory,
-            verbose=self.verbose,
-            max_iterations=self.max_iterations,
-            handle_parsing_errors=True,
-            return_intermediate_steps=False
-        )
-        
-        return executor
-    
+    def _format_messages(self, messages: List[BaseMessage]) -> str:
+        """Format messages for prompt"""
+        formatted = []
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                formatted.append(f"User: {msg.content}")
+            elif isinstance(msg, AIMessage):
+                formatted.append(f"Spidey: {msg.content}")
+        return "\n".join(formatted)
+
     def invoke(self, user_input: str, chat_history: str = "") -> Dict[str, Any]:
         """
         Invoke the agent with user input.
-        
+
         Args:
             user_input: The user's message/request
             chat_history: Optional previous conversation context
-            
+
         Returns:
             Dictionary with agent response and metadata
         """
         try:
             logger.info(f"Invoking Spidey Agent with input: {user_input[:100]}...")
+
+            # Build messages from chat history if provided
+            messages = []
+            if chat_history:
+                # Parse chat history (simple format: "User: X\nSpidey: Y")
+                for line in chat_history.split('\n'):
+                    if line.startswith('User: '):
+                        messages.append(HumanMessage(content=line[6:]))
+                    elif line.startswith('Spidey: '):
+                        messages.append(AIMessage(content=line[8:]))
+
+            # Add current user input
+            messages.append(HumanMessage(content=user_input))
+
+            # Prepare initial state
+            initial_state = AgentState(
+                messages=messages,
+                user_email="",
+                key_type=self.key_type,
+                api_key=self.api_key,
+                error=None
+            )
+
+            # Run the graph
+            final_state = self.graph.invoke(initial_state)
+
+            # Extract the final response
+            final_messages = final_state["messages"]
+            last_message = final_messages[-1]
             
-            # Prepare input
-            agent_input = {
-                "input": user_input,
-                "chat_history": chat_history or ""
-            }
-            
-            # Invoke the agent
-            result = self.agent_executor.invoke(agent_input)
-            
-            # Extract the output
-            output = result.get("output", "")
-            
-            logger.info(f"Agent response generated successfully")
-            
+            response_text = last_message.content if hasattr(last_message, 'content') else str(last_message)
+
             return {
-                "success": True,
-                "response": output,
+                "success": not bool(final_state.get("error")),
+                "response": response_text,
                 "action_taken": "agent_execution",
-                "intermediate_steps": result.get("intermediate_steps", [])
+                "intermediate_steps": []
             }
-            
+
         except Exception as e:
             error_msg = f"Error during agent execution: {str(e)}"
             logger.error(error_msg)
-            
-            # Provide user-friendly error messages
-            if "API_KEY_INVALID" in str(e) or "API key not valid" in str(e):
-                return {
-                    "success": False,
-                    "response": "Sorry, there seems to be an issue with the API configuration. Please check that your Gemini API key is valid.",
-                    "action_taken": "error",
-                    "error": error_msg
-                }
-            elif "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                return {
-                    "success": False,
-                    "response": "I'm a bit overwhelmed right now! The API quota has been reached. Please try again in a few minutes.",
-                    "action_taken": "error",
-                    "error": error_msg
-                }
-            else:
-                return {
-                    "success": False,
-                    "response": f"Oops! Something went wrong on my end. Let me try to help you differently. What specifically do you need help with?",
-                    "action_taken": "error",
-                    "error": error_msg
-                }
-    
-    def update_chat_history(self, history: str):
-        """Update the conversation history"""
-        if hasattr(self.agent_executor, 'memory'):
-            self.agent_executor.memory.chat_memory.clear()
-            if history:
-                # Parse and add to memory if needed
-                pass
+
+            return {
+                "success": False,
+                "response": "Oops! Something went wrong on my end. Let me try to help you differently. What specifically do you need help with?",
+                "action_taken": "error",
+                "error": error_msg
+            }
 
 
 def create_spidey_agent(
     api_key: str,
     key_type: str,
-    tools: List[Any],
+    tools: List[BaseTool],
     **kwargs
 ) -> SpideyAgent:
     """
     Factory function to create a Spidey Agent.
-    
+
     Args:
         api_key: API key for the LLM provider
         key_type: Type of key ('gemini_api_key' or 'deepseek_v3_key')
         tools: List of LangChain tools
         **kwargs: Additional arguments for SpideyAgent
-        
+
     Returns:
         Initialized SpideyAgent instance
     """
@@ -263,5 +258,5 @@ def create_spidey_agent(
     )
 
 
-__all__ = ['SpideyAgent', 'create_spidey_agent', 'SPIDEY_AGENT_PROMPT']
+__all__ = ['SpideyAgent', 'create_spidey_agent']
 

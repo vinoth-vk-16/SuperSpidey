@@ -4,13 +4,14 @@ uvicorn[standard]
 pydantic
 python-dotenv
 
-# LangChain Framework (compatible versions)
+# LangChain Framework (pinned to working versions)
 langchain
 langchain-core
 langchain-google-genai
 langchain-openai
+langgraph
 
-# AI Models
+# AI Models (compatible versions)
 google-generativeai
 openai
 
@@ -25,5 +26,3 @@ requests
 
 # Production server
 gunicorn
-
-l

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test suite for Spidey LangChain Agent
+Test suite for Spidey LangGraph Agent
 """
 
 import requests
@@ -119,7 +119,7 @@ def test_invoke(task, user_email="test@example.com", context=None, previous_conv
 def main():
     """Run all tests"""
     print("\n" + "🕷️ " * 20)
-    print(f"  Spidey LangChain Agent Test Suite - {TEST_KEY_TYPE.upper()}")
+    print(f"  Spidey LangGraph Agent Test Suite - {TEST_KEY_TYPE.upper()}")
     print("🕷️ " * 20)
     
     # Basic endpoint tests

@@ -1,8 +1,8 @@
 # 🕷️ Spidey - Multi-Model Email Automation Agent
 
-Spidey is an intelligent MCP (Model Context Protocol) server built with **LangChain's ReAct Agent Framework**, **FastAPI**, and **multiple AI models**. It specializes in email automation, lead generation, and professional outreach using secure encrypted API key storage and a structured, scalable agentic approach.
+Spidey is an intelligent MCP (Model Context Protocol) server built with **LangGraph State Machine Framework**, **FastAPI**, and **multiple AI models**. It specializes in email automation, lead generation, and professional outreach using secure encrypted API key storage and a state-based agentic approach.
 
-**Version 2.1.0** - Multi-Model Support & Secure Key Storage
+**Version 2.2.0** - LangGraph Migration & Enhanced Agent Architecture
 
 ## 🚀 Features
 
@@ -30,10 +30,11 @@ Spidey is an intelligent MCP (Model Context Protocol) server built with **LangCh
 
 ### 🏗️ Framework & Infrastructure
 - **FastAPI**: Modern web framework for the MCP server
-- **LangChain**: Agent orchestration framework with ReAct pattern
-  - `create_react_agent`: For intelligent tool selection
-  - `AgentExecutor`: For managing multi-step workflows
+- **LangGraph**: State-based agent orchestration framework
+  - `StateGraph`: For managing agent state and workflows
+  - `State`: TypedDict-based state management for conversations
   - `StructuredTool`: For type-safe tool definitions
+- **LangChain**: Foundation for AI model interactions and tool binding
 - **Firebase/Firestore**: Secure encrypted API key storage
 - **Cryptography**: Fernet encryption for API keys
 
@@ -52,7 +53,7 @@ Spidey/
 │   └── email_draft_tool.py      # LangChain tool for draft creation
 ├── agents/
 │   ├── __init__.py
-│   ├── email_agent.py           # ReAct agent implementation
+│   ├── email_agent.py           # LangGraph state-based agent implementation
 │   └── model_factory.py         # AI model factory (Gemini/DeepSeek)
 ├── utils/
 │   ├── __init__.py
@@ -60,11 +61,11 @@ Spidey/
 │   ├── encryption.py            # Fernet encryption utilities
 │   └── firestore_keys.py        # Firestore API key management
 ├── requirements.txt             # Python dependencies
-├── test_langchain_agent.py      # Test suite
+├── test_langchain_agent.py      # Test suite (now uses LangGraph)
 ├── API_KEY_STORAGE.md          # API key storage guide
 ├── DEPLOYMENT.md               # Deployment guide
 ├── GET_API_KEY.md             # API key setup guide
-├── CHANGELOG_v2.1.0.md        # Version changelog
+├── CHANGELOG_v2.2.0.md        # Version changelog
 ├── MIGRATION_SUMMARY.md       # Migration guide
 └── README.md                   # This file
 ```
@@ -119,7 +120,7 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 ### API Endpoints
 
 #### POST /invoke
-Main agent interaction endpoint using LangChain's AgentExecutor.
+Main agent interaction endpoint using LangGraph's StateGraph workflow.
 
 **Request Body**:
 ```json
@@ -187,7 +188,7 @@ Health check endpoint.
 #### GET /
 Root endpoint with agent information and capabilities.
 
-## 🧠 LangChain Agent Architecture
+## 🧠 LangGraph Agent Architecture
 
 ### Multi-Model Support
 
@@ -198,24 +199,30 @@ Spidey supports multiple AI models with automatic selection:
 
 Models are selected based on `key_type` in the request and automatically fall back if unavailable.
 
-### ReAct Pattern
+### State-Based Agent Pattern
 
-Spidey uses LangChain's **ReAct (Reasoning + Acting)** pattern:
+Spidey uses LangGraph's **StateGraph** pattern for robust workflow management:
 
 ```
-User Request → Model Selection → Agent Reasoning → Tool Selection → Tool Execution → Final Answer
+User Request → StateGraph → Message Processing → LLM Call → Tool Orchestration → Final Response
 ```
 
 ### Agent Workflow:
 
 1. **Request**: User sends task with `key_type`
-2. **Key Fetch**: Encrypted API key retrieved from Firestore
-3. **Model Init**: Appropriate AI model initialized (Gemini/DeepSeek)
-4. **Thought**: Agent analyzes the user's request
-5. **Action**: Decides whether to use a tool or respond directly
-6. **Action Input**: Prepares tool parameters if needed
-7. **Observation**: Processes tool execution results
-8. **Final Answer**: Provides response to the user
+2. **State Init**: AgentState created with message history and context
+3. **Key Fetch**: Encrypted API key retrieved from Firestore
+4. **Model Init**: Appropriate AI model initialized (Gemini/DeepSeek)
+5. **Graph Execution**: LangGraph processes the conversation state
+6. **LLM Reasoning**: Model analyzes request with tool awareness
+7. **Tool Execution**: Email drafts created when requested (via email management API)
+8. **Response**: Final answer returned to user
+
+### State Management:
+
+- **AgentState**: TypedDict managing conversation messages and metadata
+- **Message History**: Tracks HumanMessage and AIMessage sequences
+- **Tool Awareness**: LLM prompted with available tools and their descriptions
 
 ### Available Tools:
 
@@ -473,11 +480,11 @@ This project is part of the ContactRemedy suite.
 - **[API_KEY_STORAGE.md](./API_KEY_STORAGE.md)** - Complete API key storage and encryption guide
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Production deployment guide
 - **[GET_API_KEY.md](./GET_API_KEY.md)** - How to obtain API keys
-- **[CHANGELOG_v2.1.0.md](./CHANGELOG_v2.1.0.md)** - Version 2.1.0 changelog
+- **[CHANGELOG_v2.2.0.md](./CHANGELOG_v2.2.0.md)** - Version 2.2.0 changelog
 - **[MIGRATION_SUMMARY.md](./MIGRATION_SUMMARY.md)** - Migration guide
 
 ---
 
-**Spidey v2.1.0 is ready to help you automate your email outreach using secure, multi-model AI! 🕷️🤖**
+**Spidey v2.2.0 is ready to help you automate your email outreach using secure, multi-model AI! 🕷️🤖**
 
-*Powered by LangChain, FastAPI, Gemini AI, and DeepSeek AI with secure encrypted key storage*
+*Powered by LangGraph, FastAPI, Gemini AI, and DeepSeek AI with secure encrypted key storage*
