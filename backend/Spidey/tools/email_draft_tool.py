@@ -165,10 +165,7 @@ create_email_drafts_tool = StructuredTool.from_function(
     Use this tool when the user explicitly asks to CREATE, WRITE, DRAFT, or GENERATE actual emails.
     
     This tool is perfect for:
-    - Creating outreach emails to multiple prospects
-    - Generating job application emails
-    - Preparing email campaigns
-    - Creating follow-up sequences
+    - Creating email drafts when the user asks to create, write, draft, or generate actual emails.
     
     Input should include:
     - user_email: The user's email address
