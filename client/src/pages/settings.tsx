@@ -32,10 +32,16 @@ const WRITING_STYLES = [
   { value: 'conversational', label: 'Conversational' },
 ];
 
+const AI_MODELS = [
+  { value: 'gemini_api_key', label: 'Google Gemini' },
+  { value: 'deepseek_v3_key', label: 'DeepSeek V3 (OpenRouter)' },
+];
+
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('user-info');
   const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini_api_key');
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [isApiSaved, setIsApiSaved] = useState(false);
   
@@ -73,14 +79,32 @@ export default function SettingsPage() {
     }
   }, [userInfoData]);
 
-  // Load API key from localStorage
+  // Load API key and model selection from localStorage
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini-api-key');
+    const savedModel = localStorage.getItem('ai-model-type') || 'gemini_api_key';
+    setSelectedModel(savedModel);
+    
+    const savedKey = localStorage.getItem(`api-key-${savedModel}`);
     if (savedKey) {
       setApiKey(savedKey);
       setIsApiSaved(true);
+    } else {
+      setApiKey('');
+      setIsApiSaved(false);
     }
   }, []);
+
+  // Load API key when model changes
+  useEffect(() => {
+    const savedKey = localStorage.getItem(`api-key-${selectedModel}`);
+    if (savedKey) {
+      setApiKey(savedKey);
+      setIsApiSaved(true);
+    } else {
+      setApiKey('');
+      setIsApiSaved(false);
+    }
+  }, [selectedModel]);
 
   // Save/Update user info mutation
   const saveUserInfoMutation = useMutation({
@@ -137,11 +161,16 @@ export default function SettingsPage() {
 
     setIsApiLoading(true);
     try {
-      localStorage.setItem('gemini-api-key', apiKey.trim());
+      // Save the API key with model-specific key
+      localStorage.setItem(`api-key-${selectedModel}`, apiKey.trim());
+      // Save the selected model type
+      localStorage.setItem('ai-model-type', selectedModel);
       setIsApiSaved(true);
+      
+      const modelLabel = AI_MODELS.find(m => m.value === selectedModel)?.label || 'AI model';
       toast({
         title: "Success",
-        description: "API key saved successfully",
+        description: `${modelLabel} API key saved successfully`,
       });
     } catch (error) {
       toast({
@@ -320,6 +349,29 @@ export default function SettingsPage() {
               {activeTab === 'api' && (
                 <>
                   <div className="space-y-6">
+                    {/* AI Model Selection Dropdown */}
+                    <div>
+                      <Label htmlFor="aiModel" className="text-sm font-medium text-foreground mb-2 block">
+                        AI Model
+                      </Label>
+                      <Select value={selectedModel} onValueChange={setSelectedModel}>
+                        <SelectTrigger className="w-full rounded-xl">
+                          <SelectValue placeholder="Select AI model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AI_MODELS.map((model) => (
+                            <SelectItem key={model.value} value={model.value}>
+                              {model.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Choose which AI model to use for email generation and chat
+                      </p>
+                    </div>
+
+                    {/* API Key Input */}
             <div>
                       <Label htmlFor="apiKey" className="text-sm font-medium text-foreground mb-2 block">
                 API Key
@@ -328,7 +380,7 @@ export default function SettingsPage() {
               <Input
                 id="apiKey"
                 type="password"
-                placeholder="Enter your Gemini API key"
+                placeholder={`Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
                 value={apiKey}
                           onChange={(e) => {
                             setApiKey(e.target.value);
@@ -352,7 +404,7 @@ export default function SettingsPage() {
                     <div className="flex justify-end pt-2">
             <Button
                         onClick={handleApiSave}
-                        disabled={isApiLoading || (isApiSaved && apiKey === localStorage.getItem('gemini-api-key'))}
+                        disabled={isApiLoading || (isApiSaved && apiKey === localStorage.getItem(`api-key-${selectedModel}`))}
                         className="btn-superhuman bg-primary hover:brightness-110 text-primary-foreground px-8"
               data-testid="button-save-api-key"
             >
@@ -361,7 +413,7 @@ export default function SettingsPage() {
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                             Saving...
                           </>
-                        ) : isApiSaved && apiKey === localStorage.getItem('gemini-api-key') ? (
+                        ) : isApiSaved && apiKey === localStorage.getItem(`api-key-${selectedModel}`) ? (
                           <>
                             <Check className="w-4 h-4 mr-2" />
                             Saved
@@ -379,45 +431,87 @@ export default function SettingsPage() {
                   {/* Instructions Card */}
                   <div className="mt-8 bg-muted/30 border border-border rounded-xl p-5">
                     <h3 className="text-sm font-semibold text-foreground mb-3">
-                      How to get your Gemini API key
+                      {selectedModel === 'gemini_api_key' 
+                        ? 'How to get your Gemini API key'
+                        : 'How to get your DeepSeek API key (OpenRouter)'}
               </h3>
-                    <ol className="space-y-3 text-xs text-muted-foreground">
-                      <li className="flex items-start space-x-3">
-                        <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
-                          1
-                        </span>
-                        <span>
-                  Visit{' '}
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                            className="text-primary hover:underline inline-flex items-center"
-                  >
-                    Google AI Studio
-                            <ExternalLink className="w-3 h-3 ml-1" />
-                          </a>
-                        </span>
-                      </li>
-                      <li className="flex items-start space-x-3">
-                        <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
-                          2
-                        </span>
-                        <span>Sign in with your Google account</span>
-                      </li>
-                      <li className="flex items-start space-x-3">
-                        <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
-                          3
-                        </span>
-                        <span>Click "Create API Key" button</span>
-                      </li>
-                      <li className="flex items-start space-x-3">
-                        <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
-                          4
-                        </span>
-                        <span>Copy the generated key and paste it in the field above</span>
-                </li>
-              </ol>
+                    {selectedModel === 'gemini_api_key' ? (
+                      <ol className="space-y-3 text-xs text-muted-foreground">
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            1
+                          </span>
+                          <span>
+                    Visit{' '}
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                              className="text-primary hover:underline inline-flex items-center"
+                    >
+                      Google AI Studio
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </a>
+                          </span>
+                        </li>
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            2
+                          </span>
+                          <span>Sign in with your Google account</span>
+                        </li>
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            3
+                          </span>
+                          <span>Click "Create API Key" button</span>
+                        </li>
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            4
+                          </span>
+                          <span>Copy the generated key and paste it in the field above</span>
+                        </li>
+                      </ol>
+                    ) : (
+                      <ol className="space-y-3 text-xs text-muted-foreground">
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            1
+                          </span>
+                          <span>
+                    Visit{' '}
+                    <a
+                      href="https://openrouter.ai/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                              className="text-primary hover:underline inline-flex items-center"
+                    >
+                      OpenRouter API Keys
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </a>
+                          </span>
+                        </li>
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            2
+                          </span>
+                          <span>Sign in or create an OpenRouter account</span>
+                        </li>
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            3
+                          </span>
+                          <span>Click "Create Key" and add credits to your account</span>
+                        </li>
+                        <li className="flex items-start space-x-3">
+                          <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
+                            4
+                          </span>
+                          <span>Copy the API key and paste it in the field above</span>
+                        </li>
+                      </ol>
+                    )}
                   </div>
 
                   {/* Info Card */}
@@ -426,9 +520,19 @@ export default function SettingsPage() {
                       Why do I need an API key?
                     </h3>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      The Gemini API key enables AI-powered features like email composition assistance, 
-                      smart replies, and content improvement. Your key is stored securely in your browser 
-                      and is only used to communicate directly with Google's AI services.
+                      {selectedModel === 'gemini_api_key' ? (
+                        <>
+                          The Gemini API key enables AI-powered features like email composition assistance, 
+                          smart replies, and content improvement. Your key is stored securely in your browser 
+                          and is only used to communicate directly with Google's AI services.
+                        </>
+                      ) : (
+                        <>
+                          The DeepSeek V3 API (via OpenRouter) provides powerful AI capabilities for email composition, 
+                          smart replies, and content improvement. Your key is stored securely in your browser 
+                          and is only used to communicate with OpenRouter's API services.
+                        </>
+                      )}
                     </p>
                   </div>
                 </>

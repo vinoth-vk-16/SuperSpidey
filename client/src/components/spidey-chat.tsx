@@ -107,8 +107,21 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
     setIsLoading(true);
 
     try {
-      // Get Gemini API key from environment or use fallback
-      const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBBRe8sVTuBxz4MZJZp8QZYf6TJ7wPxMQ4';
+      // Get selected AI model type from localStorage (user settings)
+      const selectedModel = localStorage.getItem('ai-model-type') || 'gemini_api_key';
+      const apiKey = localStorage.getItem(`api-key-${selectedModel}`);
+      
+      if (!apiKey) {
+        const modelName = selectedModel === 'gemini_api_key' ? 'Gemini' : 'DeepSeek V3';
+        toast({
+          title: "API Key Required",
+          description: `Please set your ${modelName} API key in Settings before using Spidey`,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        setMessages(prev => prev.filter(m => m.id !== userMessage.id));
+        return;
+      }
       
       const response = await fetch('https://superspidey-spideyagent.onrender.com/invoke', {
         method: 'POST',
@@ -117,7 +130,7 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
         },
         body: JSON.stringify({
           user_email: user.email,
-          gemini_api_key: geminiApiKey,
+          key_type: selectedModel,
           task: inputValue,
           context: buildContext(),
           previous_convo: conversationHistory,

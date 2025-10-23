@@ -7,6 +7,8 @@ import os
 import json
 from typing import Optional
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
+import base64
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,6 +24,22 @@ firebase_admin.initialize_app(cred)
 
 # Initialize Firestore client
 db = firestore.client()
+
+# Load encryption key from environment
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+if not ENCRYPTION_KEY:
+    raise Exception("ENCRYPTION_KEY environment variable not found. Make sure it's set in the .env file")
+
+# Create Fernet cipher instance
+cipher = Fernet(ENCRYPTION_KEY.encode())
+
+def encrypt_key(key: str) -> str:
+    """Encrypt a key using Fernet encryption"""
+    return cipher.encrypt(key.encode()).decode()
+
+def decrypt_key(encrypted_key: str) -> str:
+    """Decrypt a key using Fernet encryption"""
+    return cipher.decrypt(encrypted_key.encode()).decode()
 
 app = FastAPI(title="Google OAuth Storage Service", version="1.0.0")
 
@@ -43,6 +61,21 @@ class OAuthCredentialsResponse(BaseModel):
     user_email: str
     oauth: str
     refresh_token: Optional[str] = None
+
+class KeyStorageRequest(BaseModel):
+    user_email: str
+    key_type: str
+    key_value: str
+
+class KeyStorageResponse(BaseModel):
+    user_email: str
+    key_type: str
+    message: str
+
+class KeyRetrievalResponse(BaseModel):
+    user_email: str
+    key_type: str
+    key_value: str
 
 @app.post("/store-auth")
 async def store_oauth_credentials(credentials: OAuthCredentials):
@@ -100,6 +133,72 @@ async def get_oauth_credentials(user_email: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve credentials: {str(e)}")
+
+@app.post("/store-key")
+async def store_encrypted_key(request: KeyStorageRequest):
+    """
+    Store an encrypted key for a user in Firestore under the keys object
+    """
+    try:
+        # Reference to the document with user email as ID
+        doc_ref = db.collection('google_oauth_credentials').document(request.user_email)
+
+        # Encrypt the key
+        encrypted_key = encrypt_key(request.key_value)
+
+        # Set the document with the encrypted key in the keys object
+        # This will create the keys object if it doesn't exist, or update it if it does
+        doc_ref.set({
+            f'keys.{request.key_type}': encrypted_key
+        }, merge=True)
+
+        return KeyStorageResponse(
+            user_email=request.user_email,
+            key_type=request.key_type,
+            message="Key stored successfully"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to store key: {str(e)}")
+
+@app.get("/get-key/{user_email}/{key_type}")
+async def get_encrypted_key(user_email: str, key_type: str):
+    """
+    Retrieve and decrypt a key for a user from Firestore
+    """
+    try:
+        # Reference to the document with user email as ID
+        doc_ref = db.collection('google_oauth_credentials').document(user_email)
+
+        # Get the document
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="No keys found for this user")
+
+        data = doc.to_dict()
+
+        # Check if keys object exists
+        if 'keys' not in data:
+            raise HTTPException(status_code=404, detail="No keys object found for this user")
+
+        # Check if the specific key type exists
+        if key_type not in data['keys']:
+            raise HTTPException(status_code=404, detail=f"Key type '{key_type}' not found for this user")
+
+        # Decrypt the key
+        decrypted_key = decrypt_key(data['keys'][key_type])
+
+        return KeyRetrievalResponse(
+            user_email=user_email,
+            key_type=key_type,
+            key_value=decrypted_key
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve key: {str(e)}")
 
 @app.get("/health")
 async def health_check():
