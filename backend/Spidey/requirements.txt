@@ -5,8 +5,8 @@ python-dotenv
 
 # LangChain and related packages
 langchain
-langchain-core
-langchain-google-genai
+langchain-core==0.2.36
+langchain-google-genai==1.0.10
 langchain-openai
 langgraph
 
