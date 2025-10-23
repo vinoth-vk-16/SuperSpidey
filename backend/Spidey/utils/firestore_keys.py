@@ -28,10 +28,10 @@ def initialize_firestore():
         logger.info("Firebase already initialized")
     except ValueError:
         # Initialize Firebase
-        service_key_path = os.getenv("FIREBASE_SERVICE_KEY_PATH")
+        service_key_path = os.getenv("service_key")
         
         if not service_key_path:
-            raise ValueError("FIREBASE_SERVICE_KEY_PATH environment variable not set")
+            raise ValueError("service_key environment variable not set")
         
         if not os.path.exists(service_key_path):
             raise FileNotFoundError(f"Firebase service key not found at: {service_key_path}")
