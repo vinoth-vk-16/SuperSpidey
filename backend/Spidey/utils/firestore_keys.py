@@ -88,19 +88,13 @@ def fetch_api_key(user_email: str, key_type: str) -> Optional[str]:
         
         doc_data = doc.to_dict()
         
-        # Check if keys field exists
-        if 'keys' not in doc_data:
-            logger.error(f"No 'keys' field found for user: {user_email}")
-            raise ValueError(f"No API keys configured for user {user_email}")
-        
-        keys = doc_data['keys']
-        
-        # Check if specific key type exists
-        if key_type not in keys:
-            logger.error(f"Key type '{key_type}' not found for user: {user_email}")
+        # Check if specific key field exists (using dotted notation)
+        key_field = f'keys.{key_type}'
+        if key_field not in doc_data:
+            logger.error(f"Key field '{key_field}' not found for user: {user_email}")
             raise ValueError(f"API key type '{key_type}' not configured for user {user_email}")
-        
-        encrypted_key = keys[key_type]
+
+        encrypted_key = doc_data[key_field]
         
         # Decrypt the key
         decrypted_key = decrypt_value(encrypted_key)
@@ -119,10 +113,10 @@ def fetch_api_key(user_email: str, key_type: str) -> Optional[str]:
 def list_available_keys(user_email: str) -> Dict[str, bool]:
     """
     List all available API key types for a user.
-    
+
     Args:
         user_email: User's email
-        
+
     Returns:
         Dictionary of key_type -> exists (bool)
     """
@@ -130,15 +124,22 @@ def list_available_keys(user_email: str) -> Dict[str, bool]:
         db = get_firestore_client()
         doc_ref = db.collection('google_oauth_credentials').document(user_email)
         doc = doc_ref.get()
-        
+
         if not doc.exists:
             return {}
-        
+
         doc_data = doc.to_dict()
-        keys = doc_data.get('keys', {})
-        
-        return {key: True for key in keys.keys()}
-        
+
+        # Look for keys with dotted notation (keys.gemini_api_key, keys.deepseek_v3_key, etc.)
+        available_keys = {}
+        for field_name, field_value in doc_data.items():
+            if field_name.startswith('keys.'):
+                # Extract key_type from 'keys.key_type'
+                key_type = field_name[5:]  # Remove 'keys.' prefix
+                available_keys[key_type] = True
+
+        return available_keys
+
     except Exception as e:
         logger.error(f"Error listing keys for {user_email}: {str(e)}")
         return {}
