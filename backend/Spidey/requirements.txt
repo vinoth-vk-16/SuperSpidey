@@ -11,8 +11,8 @@ langchain-openai
 langgraph
 
 # AI Models (stable versions)
-google-generativeai==0.8.3
-openai==1.0.0
+google-generativeai
+openai
 
 # Firebase
 firebase-admin
