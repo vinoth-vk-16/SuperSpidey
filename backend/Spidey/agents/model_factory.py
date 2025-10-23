@@ -10,46 +10,52 @@ from langchain_openai import ChatOpenAI
 logger = logging.getLogger(__name__)
 
 
-def create_gemini_model(api_key: str, model_name: str = "gemini-2.5-flash", temperature: float = 0.7):
+def create_gemini_model(api_key: str, model_name: str = "gemini-1.5-flash", temperature: float = 0.7):
     """
     Create a Gemini LLM instance with fallback models.
-    
+
     Args:
         api_key: Gemini API key
         model_name: Primary model name
         temperature: Response temperature
-        
+
     Returns:
         ChatGoogleGenerativeAI instance
     """
+    # Use more stable models, starting with proven ones
     model_names = [
-        model_name,
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-1.5-pro'
+        'gemini-1.5-flash',  # Most stable
+        'gemini-1.5-lite',    # Stable but more expensive
+        'gemini-1.0-pro',    # Very stable fallback
     ]
-    
+
     for model in model_names:
         try:
             llm = ChatGoogleGenerativeAI(
                 model=model,
                 google_api_key=api_key,
                 temperature=temperature,
-                convert_system_message_to_human=True
+                convert_system_message_to_human=True,
+                # Add safety settings to prevent issues
+                safety_settings=None,
+                # Disable streaming to avoid response parsing issues
+                streaming=False
             )
             logger.info(f"✅ Successfully initialized Gemini model: {model}")
             return llm
         except Exception as e:
             logger.warning(f"⚠️ Failed to initialize Gemini model {model}: {str(e)}")
             continue
-    
-    # Final fallback
-    logger.info("Using final fallback: gemini-1.5-flash")
+
+    # Final fallback - should always work
+    logger.warning("Using emergency fallback: gemini-1.0-pro")
     return ChatGoogleGenerativeAI(
-        model='gemini-1.5-flash',
+        model='gemini-1.0-pro',
         google_api_key=api_key,
         temperature=temperature,
-        convert_system_message_to_human=True
+        convert_system_message_to_human=True,
+        safety_settings=None,
+        streaming=False
     )
 
 

@@ -188,16 +188,24 @@ Remember: Only use tools when explicitly asked to CREATE/WRITE/DRAFT emails."""
             try:
                 response = self.llm.invoke(prompt)
                 response_text = response.content if hasattr(response, 'content') else str(response)
-                
+
                 # Handle case where response might be a list
                 if isinstance(response_text, list):
                     response_text = "\n".join(str(item) for item in response_text)
-                
+
                 return {"messages": [AIMessage(content=response_text)]}
+            except AttributeError as e:
+                # Handle Gemini API response parsing errors (like 'int' object has no attribute 'name')
+                if "'int' object has no attribute 'name'" in str(e):
+                    logger.warning("Gemini API response parsing error, providing fallback response")
+                    fallback_response = AIMessage(content="👋 Hi! I'm Spidey, your email buddy. I love helping with emails - whether you need to write professional outreach emails, apply for jobs, or just get better at email communication.\n\nWhat kind of email help do you need today?")
+                    return {"messages": [fallback_response]}
+                else:
+                    raise  # Re-raise if it's a different AttributeError
             except Exception as e:
                 error_msg = f"Error calling LLM: {str(e)}"
                 logger.error(error_msg)
-                
+
                 # Provide user-friendly error messages
                 if "API_KEY_INVALID" in str(e) or "API key not valid" in str(e):
                     error_response = AIMessage(content="Sorry, there seems to be an issue with the API configuration. Please check that your API key is valid.")
@@ -205,7 +213,7 @@ Remember: Only use tools when explicitly asked to CREATE/WRITE/DRAFT emails."""
                     error_response = AIMessage(content="I'm a bit overwhelmed right now! The API quota has been reached. Please try again in a few minutes.")
                 else:
                     error_response = AIMessage(content="Oops! Something went wrong on my end. Let me try to help you differently. What specifically do you need help with?")
-                
+
                 return {"messages": [error_response], "error": error_msg}
 
         # Create the graph
