@@ -159,9 +159,36 @@ export default function SettingsPage() {
       return;
     }
 
+    if (!user?.email) {
+      toast({
+        title: "Error",
+        description: "User not authenticated",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsApiLoading(true);
     try {
-      // Save the API key with model-specific key
+      // Store the API key in backend (encrypted in Firestore)
+      const response = await fetch('https://superspidey-oauth.onrender.com/store-key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_email: user.email,
+          key_type: selectedModel, // 'gemini_api_key' or 'deepseek_v3_key'
+          key_value: apiKey.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to store API key');
+      }
+
+      // Also save in localStorage for quick access
       localStorage.setItem(`api-key-${selectedModel}`, apiKey.trim());
       // Save the selected model type
       localStorage.setItem('ai-model-type', selectedModel);
@@ -173,9 +200,10 @@ export default function SettingsPage() {
         description: `${modelLabel} API key saved successfully`,
       });
     } catch (error) {
+      console.error('Failed to save API key:', error);
       toast({
         title: "Error", 
-        description: "Failed to save API key",
+        description: error instanceof Error ? error.message : "Failed to save API key",
         variant: "destructive"
       });
     } finally {
@@ -442,14 +470,14 @@ export default function SettingsPage() {
                             1
                           </span>
                           <span>
-                    Visit{' '}
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  Visit{' '}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
                               className="text-primary hover:underline inline-flex items-center"
-                    >
-                      Google AI Studio
+                  >
+                    Google AI Studio
                               <ExternalLink className="w-3 h-3 ml-1" />
                             </a>
                           </span>
@@ -509,8 +537,8 @@ export default function SettingsPage() {
                             4
                           </span>
                           <span>Copy the API key and paste it in the field above</span>
-                        </li>
-                      </ol>
+                </li>
+              </ol>
                     )}
                   </div>
 

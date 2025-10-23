@@ -6,8 +6,8 @@ python-dotenv
 
 # LangChain Framework (pinned to working versions)
 langchain
-langchain-core
-langchain-google-genai
+langchain-core==0.2.0
+langchain-google-genai==0.2.0
 langchain-openai
 langgraph
 

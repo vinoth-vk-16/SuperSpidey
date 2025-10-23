@@ -109,20 +109,9 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
     try {
       // Get selected AI model type from localStorage (user settings)
       const selectedModel = localStorage.getItem('ai-model-type') || 'gemini_api_key';
-      const apiKey = localStorage.getItem(`api-key-${selectedModel}`);
       
-      if (!apiKey) {
-        const modelName = selectedModel === 'gemini_api_key' ? 'Gemini' : 'DeepSeek V3';
-        toast({
-          title: "API Key Required",
-          description: `Please set your ${modelName} API key in Settings before using Spidey`,
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        setMessages(prev => prev.filter(m => m.id !== userMessage.id));
-        return;
-      }
-      
+      // Note: We don't check for API key in localStorage because the backend
+      // will fetch the encrypted key from Firestore using key_type
       const response = await fetch('https://superspidey-spideyagent.onrender.com/invoke', {
         method: 'POST',
         headers: {
