@@ -83,7 +83,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const savedModel = localStorage.getItem('ai-model-type') || 'gemini_api_key';
     setSelectedModel(savedModel);
-    
+
     const savedKey = localStorage.getItem(`api-key-${savedModel}`);
     if (savedKey) {
       setApiKey(savedKey);
@@ -93,6 +93,11 @@ export default function SettingsPage() {
       setIsApiSaved(false);
     }
   }, []);
+
+  // Save selected model to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('ai-model-type', selectedModel);
+  }, [selectedModel]);
 
   // Load API key when model changes
   useEffect(() => {

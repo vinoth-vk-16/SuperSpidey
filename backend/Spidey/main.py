@@ -247,7 +247,7 @@ async def invoke_spidey(request: SpideyRequest):
         result = agent.invoke(
             user_input=full_input,
             chat_history=chat_history,
-            user_email=user_email
+            user_email=request.user_email
         )
         
         # Process the agent's response
