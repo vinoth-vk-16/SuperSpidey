@@ -6,7 +6,7 @@ import logging
 import os
 from langchain.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import HumanMessage, SystemMessage
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langchain_core.messages import ToolMessage
 from langgraph.graph import MessageGraph, END
 
@@ -35,16 +35,19 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
     # Define functions - exact from test.py
     def call_model(messages):
         # Add system message - exact from test.py
-        system_msg = SystemMessage(content="Your name is Spidey. You help users create multiple email drafts efficiently.You help users with their email needs.")
+        system_msg = SystemMessage(content="Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.")
         full_messages = [system_msg] + messages
 
         try:
             response = model_with_tools.invoke(full_messages)
+            logger.info(f"Model response type: {type(response)}")
+            logger.info(f"Has tool_calls: {hasattr(response, 'tool_calls')}")
+            if hasattr(response, 'tool_calls'):
+                logger.info(f"Tool calls: {response.tool_calls}")
             return response
         except Exception as e:
-            logger.error(f"Error calling model: {str(e)}")
-            from langchain.schema import AIMessage
-            return AIMessage(content="Oops! Something went wrong. Could you please rephrase your request?")
+            logger.error(f"Error calling model: {str(e)}", exc_info=True)
+            return AIMessage(content="Error! Please try again later.")
     
     def route(messages):
         last_message = messages[-1]
@@ -57,18 +60,36 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         tool_calls = last_message.tool_calls
         
         results = []
-        for tool_call in tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = tool_call["args"]
-            
-            if tool_name == "create_email_drafts":
-                result = create_email_drafts.invoke(tool_args)
-                results.append(result)
+        for i, tool_call in enumerate(tool_calls):
+            try:
+                # Handle different tool_call formats
+                if isinstance(tool_call, dict):
+                    tool_name = tool_call.get("name")
+                    tool_args = tool_call.get("args", {})
+                    tool_id = tool_call.get("id", f"call_{i}")
+                else:
+                    # If tool_call is an object with attributes
+                    tool_name = getattr(tool_call, 'name', None)
+                    tool_args = getattr(tool_call, 'args', {})
+                    tool_id = getattr(tool_call, 'id', f"call_{i}")
+                
+                logger.info(f"Processing tool call: {tool_name} with args: {tool_args}")
+                
+                if tool_name == "create_email_drafts":
+                    result = create_email_drafts.invoke(tool_args)
+                    results.append((result, tool_id))
+                else:
+                    logger.warning(f"Unknown tool: {tool_name}")
+                    results.append(({"error": f"Unknown tool: {tool_name}"}, tool_id))
+                    
+            except Exception as e:
+                logger.error(f"Error executing tool: {str(e)}", exc_info=True)
+                results.append(({"error": str(e)}, f"call_{i}"))
         
-        # Return tool results as a message
+        # Return tool results as messages
         tool_messages = [
-            ToolMessage(content=str(result), tool_call_id=tool_calls[i]["id"])
-            for i, result in enumerate(results)
+            ToolMessage(content=str(result), tool_call_id=tool_id)
+            for result, tool_id in results
         ]
         return tool_messages
     
@@ -91,4 +112,3 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
 
 
 __all__ = ['create_spidey_agent']
-
