@@ -3,13 +3,15 @@ Email Agent - Uses the exact working pattern from test.py
 """
 
 import logging
+import os
+from langchain.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.schema import HumanMessage, SystemMessage
 from langchain_core.messages import ToolMessage
 from langgraph.graph import MessageGraph, END
-from .model_factory import create_llm_from_key_type
 
 # Import tool from tools module
 import sys
-import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from tools.email_draft_tool import create_email_drafts
 
@@ -18,27 +20,31 @@ logger = logging.getLogger(__name__)
 
 def create_spidey_agent(api_key: str, key_type: str, **kwargs):
     """
-    Create Spidey agent using the exact working pattern from test.py
+    Create Spidey agent using the EXACT working pattern from test.py
     """
-    # Get LLM with the provided API key
-    llm = create_llm_from_key_type(
-        api_key=api_key,
-        key_type=key_type,
+    # Use the exact same model setup as test.py
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash-lite",
+        google_api_key=api_key,
         temperature=kwargs.get('temperature', 0.7)
     )
-    
+
     # Bind the tool - exact from test.py
     model_with_tools = llm.bind_tools([create_email_drafts])
-    
+
     # Define functions - exact from test.py
     def call_model(messages):
         # Add system message - exact from test.py
-        from langchain.schema import SystemMessage
         system_msg = SystemMessage(content="Your name is Spidey. You help users create multiple email drafts efficiently.You help users with their email needs.")
         full_messages = [system_msg] + messages
-        
-        response = model_with_tools.invoke(full_messages)
-        return response
+
+        try:
+            response = model_with_tools.invoke(full_messages)
+            return response
+        except Exception as e:
+            logger.error(f"Error calling model: {str(e)}")
+            from langchain.schema import AIMessage
+            return AIMessage(content="Oops! Something went wrong. Could you please rephrase your request?")
     
     def route(messages):
         last_message = messages[-1]
