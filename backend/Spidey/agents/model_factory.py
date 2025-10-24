@@ -24,7 +24,8 @@ def create_gemini_model(api_key: str, model_name: str = "gemini-1.5-flash", temp
     """
     # Use more stable models, starting with proven ones
     model_names = [
-        'gemini-1.5-flash',  # Most stable
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
         'gemini-1.5-lite',    # Stable but more expensive
         'gemini-1.0-pro',    # Very stable fallback
     ]
