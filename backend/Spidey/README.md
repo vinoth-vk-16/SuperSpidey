@@ -1,17 +1,17 @@
 # 🕷️ Spidey - Multi-Model Email Automation Agent
 
-Spidey is an intelligent MCP (Model Context Protocol) server built with **LangGraph State Machine Framework**, **FastAPI**, and **multiple AI models**. It specializes in email automation, lead generation, and professional outreach using secure encrypted API key storage and a state-based agentic approach.
+Spidey is an intelligent MCP (Model Context Protocol) server built with **LangGraph State Machine Framework**, **FastAPI**, and **multiple AI models**. It specializes in email automation, lead generation, and professional outreach using secure encrypted API key storage and a **truly agentic LLM-driven tool selection** approach.
 
-**Version 2.3.0** - Smart Tool Execution & Enhanced Agent Intelligence
+**Version 3.0.0** - LLM-Driven Tool Selection (No More Hardcoded Rules!)
 
 ## 🚀 Features
 
 ### 🤖 AI & Agent Features
 - **Multi-Model Support**: Choose between Gemini (Google) and DeepSeek (OpenRouter)
-- **Smart Tool Execution**: Automatically detects and executes email draft creation requests
+- **LLM-Driven Tool Selection**: LLM autonomously decides when to use tools via `bind_tools()` - NO hardcoded keyword matching!
 - **Intelligent Agent Framework**: LangGraph StateGraph for robust workflow management and state tracking
 - **Conversational Interface**: Natural dialogue for clarifying requirements and gathering information
-- **Automatic Parameter Extraction**: Extracts recipient emails and context from user messages
+- **Autonomous Decision Making**: LLM extracts parameters, decides tool usage, and generates content dynamically
 
 ### 📧 Email Automation
 - **Email Draft Creation**: Generate multiple personalized email drafts with tool-based execution
@@ -44,6 +44,128 @@ Spidey is an intelligent MCP (Model Context Protocol) server built with **LangGr
 - **Pydantic**: Data validation and serialization
 - **Requests**: HTTP client for email management API calls
 - **python-dotenv**: Environment variable management
+
+## 🧠 Architecture: LLM-Driven vs Rule-Based
+
+### ❌ Old Approach (Rule-Based - Version 2.x)
+```python
+# Hardcoded keyword matching
+draft_keywords = ['create', 'write', 'draft', 'generate']
+if any(keyword in user_input.lower() for keyword in draft_keywords):
+    execute_tool()  # Manual tool execution
+```
+
+**Problems:**
+- ❌ Rigid keyword matching
+- ❌ Can't handle natural language variations
+- ❌ Requires constant maintenance for new patterns
+- ❌ No context understanding
+- ❌ False positives/negatives
+
+### ✅ New Approach (LLM-Driven - Version 3.0)
+```python
+# LLM decides autonomously
+llm_with_tools = llm.bind_tools(tools)  # Bind tools to LLM
+response = llm_with_tools.invoke(messages)  # LLM decides what to do
+
+# LangGraph workflow handles execution
+if response.tool_calls:
+    execute_tools(response.tool_calls)  # Automatic tool execution
+```
+
+**Benefits:**
+- ✅ LLM understands natural language intent
+- ✅ Handles variations: "can you draft", "make an email", "write to john"
+- ✅ Context-aware decisions across multi-turn conversations
+- ✅ Extracts parameters intelligently (emails, names, context)
+- ✅ Self-correcting and adaptive
+- ✅ No maintenance needed for new phrasings
+
+### 🔄 How It Works
+
+1. **Tool Binding**
+   ```python
+   # Tools are bound to LLM, not hardcoded
+   self.llm_with_tools = self.llm.bind_tools(self.tools)
+   ```
+
+2. **Autonomous Decision Making**
+   ```python
+   # LLM receives user message with tool descriptions
+   response = self.llm_with_tools.invoke(messages)
+   
+   # LLM returns either:
+   # - Direct response (no tools needed)
+   # - Tool call with extracted parameters
+   ```
+
+3. **Dynamic Tool Execution**
+   ```python
+   # LangGraph routes based on LLM decision
+   if response.tool_calls:
+       # Execute tool(s) automatically
+       results = execute_tools(response.tool_calls)
+       # Route back to LLM for final response
+       final_response = llm.invoke(messages + [tool_results])
+   ```
+
+4. **Multi-Turn Context**
+   ```
+   User: "I need to reach out to john@example.com"
+   Spidey: "Sure! What would you like to say to John?"
+   User: "tell him about our new product"
+   Spidey: [LLM decides to call create_email_drafts tool]
+   ```
+
+### 🎯 LangGraph State Machine Flow
+
+```
+┌─────────────┐
+│   START     │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────────┐
+│   call_model            │
+│   (LLM with tools)      │
+└──────┬──────────────────┘
+       │
+       ├──► Direct Response? ──► END
+       │
+       ├──► Tool Call? ──┐
+       │                 │
+       │                 ▼
+       │          ┌──────────────┐
+       │          │ execute_tools│
+       │          └──────┬───────┘
+       │                 │
+       └◄────────────────┘
+       │
+       ▼
+┌─────────────────┐
+│  Final Response │
+└────────┬────────┘
+         │
+         ▼
+       END
+```
+
+### 🧩 State Management
+
+```python
+class AgentState(TypedDict):
+    messages: List[BaseMessage]  # Full conversation history
+    user_email: str              # User identification
+    key_type: str                # AI model selection
+    api_key: str                 # Decrypted API key
+    error: Optional[str]         # Error tracking
+```
+
+**Why This Matters:**
+- State persists across nodes
+- Conversation history maintained
+- Tools have access to full context
+- Error handling at every step
 
 ## 📁 Project Structure
 

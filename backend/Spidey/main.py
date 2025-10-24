@@ -74,8 +74,6 @@ class SpideyResponse(BaseModel):
     success: bool
     message: str
     action_taken: Optional[str] = None
-    drafts_created: Optional[int] = None
-    draft_ids: Optional[List[str]] = None
 
 
 # ============================================================================
@@ -142,9 +140,9 @@ async def root():
     """Root endpoint with service information"""
     return {
         "agent": "Spidey",
-        "version": "2.0.0",
-        "description": "Email Automation Agent powered by LangChain",
-        "framework": "LangChain + FastAPI",
+        "version": "3.0.0",
+        "description": "Email Automation Agent powered by LangGraph",
+        "framework": "LangGraph + LangChain + FastAPI",
         "capabilities": [
             "Email draft creation",
             "Lead generation assistance", 
@@ -163,8 +161,8 @@ async def health_check():
     return {
         "status": "healthy",
         "agent": "Spidey",
-        "version": "2.0.0",
-        "framework": "LangChain"
+        "version": "3.0.0",
+        "framework": "LangGraph"
     }
 
 
@@ -258,35 +256,12 @@ async def invoke_spidey(request: SpideyRequest):
                 action_taken="error"
             )
         
-        # Extract the response
-        agent_response = result.get("response", "")
-        
-        # Check if drafts were created by parsing the response
-        drafts_created = None
-        draft_ids = []
-        
-        # Look for draft creation indicators in the response
-        if "Successfully created" in agent_response and "draft" in agent_response.lower():
-            # Try to extract draft count and IDs from the response
-            try:
-                import re
-                # Extract number of drafts
-                draft_count_match = re.search(r'(\d+)\s+(?:email\s+)?draft', agent_response)
-                if draft_count_match:
-                    drafts_created = int(draft_count_match.group(1))
-                
-                # Extract draft IDs if present
-                draft_id_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-                draft_ids = re.findall(draft_id_pattern, agent_response)
-            except Exception as e:
-                logger.warning(f"Could not extract draft info from response: {str(e)}")
-        
+        # Return the agent's response directly
+        # The agent handles everything - no post-processing needed
         return SpideyResponse(
             success=True,
-            message=agent_response,
-            action_taken=result.get("action_taken", "agent_execution"),
-            drafts_created=drafts_created,
-            draft_ids=draft_ids if draft_ids else None
+            message=result.get("response", ""),
+            action_taken=result.get("action_taken", "direct_response")
         )
         
     except HTTPException:
