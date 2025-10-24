@@ -220,18 +220,18 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
           {/* Suggestion Badges - transparent with grey border */}
           <div className="w-full flex flex-wrap items-center justify-center gap-2 mb-8">
             <button
-              onClick={() => handleSuggestionClick('Write an email for draft to referral at google')}
+              onClick={() => handleSuggestionClick('Draft an email for referral at google')}
               className="h-8 px-3 cursor-pointer gap-1.5 text-xs rounded-md border border-border bg-transparent hover:bg-muted/30 transition-colors flex items-center"
             >
               <Mail aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-foreground">Write an email for draft to referral at google</span>
+              <span className="text-foreground">Draft an email for referral at google</span>
             </button>
             <button
-              onClick={() => handleSuggestionClick('How to write a professional email')}
+              onClick={() => handleSuggestionClick('How to write a proffesional email')}
               className="h-8 px-3 cursor-pointer gap-1.5 text-xs rounded-md border border-border bg-transparent hover:bg-muted/30 transition-colors flex items-center"
             >
               <Lightbulb aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-foreground">How to write a professional email</span>
+              <span className="text-foreground">How to write a proffesional email</span>
             </button>
           </div>
         </div>

@@ -51,7 +51,7 @@ def create_email_drafts(user_email: str, drafts: list) -> dict:
 # ---------------------------------------------------------------
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash-lite", 
-    google_api_key="AIzaSyBAZ623equvQfrJ8nckahINy0h4rOygdc8",
+    google_api_key="A",
     temperature=0.7
 )
 
