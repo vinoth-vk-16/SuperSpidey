@@ -112,58 +112,116 @@ class SpideyAgent:
             messages = state["messages"]
             user_email = state.get("user_email", "")
             
-            # Get the last user message
+            # Get all conversation text (not just last message)
             last_user_msg = ""
-            for msg in reversed(messages):
+            full_conversation = ""
+            for msg in messages:
                 if isinstance(msg, HumanMessage):
-                    last_user_msg = msg.content
-                    break
+                    full_conversation += msg.content + " "
+                    last_user_msg = msg.content  # Keep updating to get the last one
             
-            # Check if this is a draft creation request
+            # Check if this is a draft creation request (look at full conversation context)
             draft_keywords = ['create', 'write', 'draft', 'generate', 'make', 'compose']
             email_keywords = ['email', 'draft', 'message']
             
-            is_draft_request = any(keyword in last_user_msg.lower() for keyword in draft_keywords) and \
-                              any(keyword in last_user_msg.lower() for keyword in email_keywords)
+            # Check both last message and full conversation for draft intent
+            is_draft_request = (
+                (any(keyword in last_user_msg.lower() for keyword in draft_keywords) and 
+                 any(keyword in last_user_msg.lower() for keyword in email_keywords)) or
+                (any(keyword in full_conversation.lower() for keyword in draft_keywords) and 
+                 any(keyword in full_conversation.lower() for keyword in email_keywords) and
+                 any(confirm in last_user_msg.lower() for confirm in ['yes', 'sure', 'go ahead', 'please', 'okay', 'ok']))
+            )
             
-            # If it's a draft request and we have the user's email, try to execute the tool
-            if is_draft_request and user_email and '@gmail.com' in last_user_msg.lower():
+            # Extract recipient emails from the full conversation (not just last message)
+            import re
+            email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            
+            # First try last message
+            recipient_emails = re.findall(email_pattern, last_user_msg)
+            
+            # If no emails in last message, search full conversation
+            if not recipient_emails:
+                recipient_emails = re.findall(email_pattern, full_conversation)
+            
+            # Filter out the user's own email
+            recipient_emails = [email for email in recipient_emails if email != user_email]
+            
+            # If it's a draft request and we have recipient emails, try to execute the tool
+            if is_draft_request and user_email and recipient_emails:
                 try:
-                    # Extract recipient emails from the message
-                    import re
-                    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-                    recipient_emails = re.findall(email_pattern, last_user_msg)
+                    # Use LLM to generate appropriate email content based on conversation
+                    drafts = []
                     
-                    # Filter out the user's own email
-                    recipient_emails = [email for email in recipient_emails if email != user_email]
-                    
-                    if recipient_emails:
-                        # Build drafts array
-                        drafts = []
-                        for recipient in recipient_emails:
+                    for recipient in recipient_emails:
+                        recipient_name = recipient.split('@')[0].title()
+                        
+                        # Ask LLM to generate subject and body based on the conversation context
+                        content_prompt = f"""Based on this conversation, generate a professional email draft.
+
+Conversation context:
+{full_conversation}
+
+Recipient: {recipient_name} ({recipient})
+
+Generate ONLY:
+1. Subject line (one line)
+2. Email body (professional and concise as per user's request)
+
+Format your response EXACTLY as:
+SUBJECT: [subject line here]
+BODY: [email body here]
+
+Remember: Keep it professional, relevant to the conversation context, and personalized for {recipient_name}."""
+
+                        try:
+                            # Generate content using LLM
+                            content_response = self.llm.invoke(content_prompt)
+                            content_text = content_response.content if hasattr(content_response, 'content') else str(content_response)
+                            
+                            # Parse the LLM response
+                            subject = "Email from Spidey"
+                            body = f"Hi {recipient_name},\n\nI hope this message finds you well.\n\nBest regards"
+                            
+                            if "SUBJECT:" in content_text and "BODY:" in content_text:
+                                parts = content_text.split("BODY:", 1)
+                                subject = parts[0].replace("SUBJECT:", "").strip()
+                                body = parts[1].strip()
+                            
                             drafts.append({
                                 "user_email": user_email,
                                 "to_email": recipient,
-                                "subject": f"Professional Outreach to {recipient.split('@')[0].title()}",
-                                "body": f"Hi {recipient.split('@')[0].title()},\n\nI hope this email finds you well. I wanted to reach out regarding potential collaboration opportunities.\n\nBest regards"
+                                "subject": subject,
+                                "body": body
                             })
-                        
-                        # Execute the tool
-                        tool_input = {
-                            "user_email": user_email,
-                            "drafts": drafts
-                        }
-                        
-                        tool_result = self.tools[0].func(**tool_input)
-                        
-                        # Return success response
-                        response_text = f"✅ Successfully created {len(drafts)} email draft(s) for you!\n📝 Recipients: {', '.join(recipient_emails)}"
-                        return {
-                            "messages": [AIMessage(content=response_text)],
-                            "tool_executed": True,
-                            "tool_result": tool_result
-                        }
-                        
+                            
+                        except Exception as llm_error:
+                            logger.warning(f"LLM content generation failed: {str(llm_error)}, using simple template")
+                            # Fallback to simple template
+                            drafts.append({
+                                "user_email": user_email,
+                                "to_email": recipient,
+                                "subject": f"Message for {recipient_name}",
+                                "body": f"Hi {recipient_name},\n\nI hope this message finds you well.\n\nBest regards"
+                            })
+                    
+                    # Execute the tool
+                    tool_input = {
+                        "user_email": user_email,
+                        "drafts": drafts
+                    }
+                    
+                    logger.info(f"Creating {len(drafts)} draft(s) for recipients: {recipient_emails}")
+                    tool_result = self.tools[0].func(**tool_input)
+                    
+                    # Return success response
+                    response_text = f"✅ Successfully created {len(drafts)} email draft(s) for you!\n📝 Recipients: {', '.join(recipient_emails)}"
+                    return {
+                        "messages": [AIMessage(content=response_text)],
+                        "tool_executed": True,
+                        "tool_result": tool_result
+                    }
+                    
                 except Exception as e:
                     logger.error(f"Error executing tool: {str(e)}")
                     # Fall through to normal LLM response
@@ -205,6 +263,25 @@ Remember: Only use tools when explicitly asked to CREATE/WRITE/DRAFT emails."""
             except Exception as e:
                 error_msg = f"Error calling LLM: {str(e)}"
                 logger.error(error_msg)
+
+                # Handle model not found errors - try to switch to a different model
+                if "404" in str(e) and ("models/" in str(e) and "is not found" in str(e)):
+                    logger.warning("Model not found, attempting to use fallback model")
+                    try:
+                        # Try to create a new model with fallback
+                        from .model_factory import create_gemini_model
+                        new_llm = create_gemini_model(self.api_key, temperature=self.temperature)
+                        if new_llm.model != self.llm.model:
+                            logger.info(f"Switched from {self.llm.model} to {new_llm.model}")
+                            self.llm = new_llm
+                            # Retry with the new model
+                            response = self.llm.invoke(prompt)
+                            response_text = response.content if hasattr(response, 'content') else str(response)
+                            if isinstance(response_text, list):
+                                response_text = "\n".join(str(item) for item in response_text)
+                            return {"messages": [AIMessage(content=response_text)]}
+                    except Exception as retry_error:
+                        logger.error(f"Retry with fallback model also failed: {str(retry_error)}")
 
                 # Provide user-friendly error messages
                 if "API_KEY_INVALID" in str(e) or "API key not valid" in str(e):

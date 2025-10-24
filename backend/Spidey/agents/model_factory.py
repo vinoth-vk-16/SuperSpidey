@@ -22,13 +22,19 @@ def create_gemini_model(api_key: str, model_name: str = "gemini-1.5-flash", temp
     Returns:
         ChatGoogleGenerativeAI instance
     """
-    # Use more stable models, starting with proven ones
+    # Use stable models with proper fallback - start with user's preferred model
     model_names = [
-        'gemini-2.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-1.5-lite',    # Stable but more expensive
-        'gemini-1.0-pro',    # Very stable fallback
+        model_name,  # User's preferred model first
+        'gemini-1.5-flash',  # Primary fallback
+        'gemini-1.5-pro',    # More capable fallback
+        'gemini-1.0-pro',    # Most stable fallback
     ]
+
+    # Remove duplicates while preserving order
+    seen = set()
+    model_names = [x for x in model_names if not (x in seen or seen.add(x))]
+
+    logger.info(f"Trying Gemini models in order: {model_names}")
 
     for model in model_names:
         try:
@@ -37,27 +43,43 @@ def create_gemini_model(api_key: str, model_name: str = "gemini-1.5-flash", temp
                 google_api_key=api_key,
                 temperature=temperature,
                 convert_system_message_to_human=True,
-                # Add safety settings to prevent issues
                 safety_settings=None,
-                # Disable streaming to avoid response parsing issues
                 streaming=False
             )
-            logger.info(f"✅ Successfully initialized Gemini model: {model}")
+            # Test the model with a simple call to ensure it works
+            test_response = llm.invoke("Test")
+            logger.info(f"✅ Successfully initialized and tested Gemini model: {model}")
             return llm
         except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize Gemini model {model}: {str(e)}")
+            logger.warning(f"⚠️ Failed to initialize/test Gemini model {model}: {str(e)}")
             continue
 
-    # Final fallback - should always work
-    logger.warning("Using emergency fallback: gemini-1.0-pro")
-    return ChatGoogleGenerativeAI(
-        model='gemini-1.0-pro',
-        google_api_key=api_key,
-        temperature=temperature,
-        convert_system_message_to_human=True,
-        safety_settings=None,
-        streaming=False
-    )
+    # Emergency fallback - this should always work
+    logger.error(f"All Gemini models failed! Using emergency fallback: gemini-1.0-pro")
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model='gemini-1.0-pro',
+            google_api_key=api_key,
+            temperature=temperature,
+            convert_system_message_to_human=True,
+            safety_settings=None,
+            streaming=False
+        )
+        # Test the emergency fallback
+        test_response = llm.invoke("Test")
+        logger.warning(f"✅ Emergency fallback working: gemini-1.0-pro")
+        return llm
+    except Exception as e:
+        logger.critical(f"❌ Even emergency fallback failed: {str(e)}")
+        # Return it anyway - better than crashing
+        return ChatGoogleGenerativeAI(
+            model='gemini-1.0-pro',
+            google_api_key=api_key,
+            temperature=temperature,
+            convert_system_message_to_human=True,
+            safety_settings=None,
+            streaming=False
+        )
 
 
 def create_deepseek_model(api_key: str, model_name: str = "deepseek/deepseek-chat-v3-0324:free", temperature: float = 0.7):
