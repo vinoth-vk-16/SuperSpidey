@@ -663,6 +663,139 @@ Returns a 1x1 transparent PNG pixel image.
 }
 ```
 
+### GET /fetch-specific-spidey
+Fetch emails belonging to specific thread IDs for a user with simplified email data. Returns only essential fields for lightweight API responses.
+
+**URL Parameters:**
+- `user_email`: The email address of the user (required)
+
+**Query Parameters:**
+- `thread_ids`: Comma-separated list of thread IDs to fetch (required)
+
+**Example:**
+```
+GET /fetch-specific-spidey?user_email=user@example.com&thread_ids=thread123,thread456,thread789
+```
+
+**Response:**
+```json
+{
+  "emails": [
+    {
+      "messageId": "msg123",
+      "threadId": "thread123",
+      "to": ["recipient@example.com"],
+      "subject": "Email Subject",
+      "body": "Full email content...",
+      "isSent": false,
+      "isRead": false
+    }
+  ],
+  "total_count": 1
+}
+```
+
+**Features:**
+- Fetches emails from multiple specified threads in one request
+- Returns simplified email data with only essential fields
+- Efficient Firestore queries using threadId filtering
+- Useful for loading specific conversations or threads
+
+**Error Responses:**
+- `500`: Failed to fetch specific threads
+
+### GET /fetch-by-date-spidey
+Fetch emails for a user by specific date or date range with simplified email data.
+
+**URL Parameters:**
+- `user_email`: The email address of the user (required)
+
+**Query Parameters:**
+- `date`: Start date in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS) (required)
+- `end_date`: Optional end date for date range in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
+
+**Examples:**
+```
+# Single date (fetches emails from that day):
+GET /fetch-by-date-spidey?user_email=user@example.com&date=2024-10-24
+
+# Date range:
+GET /fetch-by-date-spidey?user_email=user@example.com&date=2024-10-24&end_date=2024-10-25
+```
+
+**Response:**
+```json
+{
+  "emails": [
+    {
+      "messageId": "msg123",
+      "threadId": "thread123",
+      "to": ["recipient@example.com"],
+      "subject": "Email Subject",
+      "body": "Full email content...",
+      "isSent": false,
+      "isRead": false
+    }
+  ],
+  "total_count": 1
+}
+```
+
+**Features:**
+- Supports both single date and date range queries
+- Uses Firestore timestamp range queries for optimal performance
+- Returns simplified email data with only essential fields
+- Useful for date-based email filtering and analytics
+
+**Error Responses:**
+- `400`: Invalid date format (must be ISO format)
+- `500`: Failed to fetch emails by date
+
+### GET /fetch-email-spidey
+Fetch paginated emails for a user with simplified email data (same pagination logic as `/fetch-emails` but with reduced response size).
+
+**URL Parameters:**
+- `user_email`: The email address of the user (required)
+
+**Query Parameters:**
+- `page`: Page number starting from 1 (optional, defaults to 1)
+
+**Example:**
+```
+GET /fetch-email-spidey?user_email=user@example.com&page=1
+```
+
+**Response:**
+```json
+{
+  "emails": [
+    {
+      "messageId": "msg123",
+      "threadId": "thread123",
+      "to": ["recipient@example.com"],
+      "subject": "Email Subject",
+      "body": "Full email content...",
+      "isSent": false,
+      "isRead": false
+    }
+  ],
+  "total_count": 45,
+  "page": 1,
+  "has_more": true
+}
+```
+
+**Features:**
+- Same pagination logic as `/fetch-emails` (30 emails per page)
+- Returns simplified email data with only essential fields
+- Sorted by timestamp (newest first)
+- Includes pagination metadata (`total_count`, `page`, `has_more`)
+- Lightweight alternative to full thread-based fetching
+
+**Error Responses:**
+- `400`: Invalid page number (must be 1 or greater)
+- `500`: Failed to fetch emails
+
 ## Features
 
 - **Token Management**: Automatically refreshes expired access tokens using refresh tokens

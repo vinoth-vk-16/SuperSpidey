@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
 Spidey MCP Server - Email Automation Agent
-An intelligent agent that helps with email automation, lead generation, and job outreach.
-Uses LangChain's ReAct agent framework for proper orchestration and scalability.
+Uses the exact working pattern from test.py with FastAPI and Firestore integration
 """
 
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,14 +13,14 @@ from pydantic import BaseModel, Field
 import uvicorn
 from dotenv import load_dotenv
 import os
+from langchain.schema import HumanMessage
 
-# Import LangChain agent and tools
+# Import agent and utilities
 from agents import create_spidey_agent
-from tools import create_email_drafts_tool
 from utils.helpers import sanitize_input, validate_email
 from utils.firestore_keys import fetch_api_key, initialize_firestore
 
-# Configure logging first
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -32,18 +30,18 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Initialize Firestore on startup
+# Initialize Firestore
 try:
     initialize_firestore()
-    logger.info("Firestore initialized successfully on startup")
+    logger.info("Firestore initialized successfully")
 except Exception as e:
     logger.warning(f"Firestore initialization skipped: {str(e)}")
 
 # FastAPI app
 app = FastAPI(
     title="Spidey MCP Server", 
-    version="2.0.0", 
-    description="Email Automation Agent powered by LangChain"
+    version="3.1.0", 
+    description="Email Automation Agent"
 )
 
 # CORS middleware
@@ -56,101 +54,62 @@ app.add_middleware(
 )
 
 
-# ============================================================================
 # Request/Response Models
-# ============================================================================
-
 class SpideyRequest(BaseModel):
-    """Request model for Spidey agent interactions"""
+    """Request model for Spidey agent"""
     user_email: str = Field(..., description="User's email address")
-    key_type: str = Field(..., description="Type of AI key to use: 'gemini_api_key' or 'deepseek_v3_key'")
-    task: str = Field(..., description="Task description for Spidey to execute")
-    context: Optional[str] = Field(None, description="Additional context for the task (e.g., writing style)")
-    previous_convo: Optional[str] = Field(None, description="Previous conversation history for context")
+    key_type: str = Field(..., description="Type of AI key: 'gemini_api_key' or 'deepseek_v3_key'")
+    task: str = Field(..., description="Task description")
+    context: Optional[str] = Field(None, description="Additional context")
+    previous_convo: Optional[str] = Field(None, description="Previous conversation history")
 
 
 class SpideyResponse(BaseModel):
-    """Response model for Spidey agent interactions"""
+    """Response model for Spidey agent"""
     success: bool
     message: str
     action_taken: Optional[str] = None
 
 
-# ============================================================================
-# Agent Management
-# ============================================================================
-
-# Cache for agent instances (keyed by API key hash for security)
-agent_cache: Dict[str, Any] = {}
+# Agent cache
+agent_cache = {}
 
 
 def get_or_create_agent(api_key: str, key_type: str, user_email: str):
-    """
-    Get existing agent from cache or create a new one.
-    
-    Args:
-        api_key: API key for the LLM provider
-        key_type: Type of key ('gemini_api_key' or 'deepseek_v3_key')
-        user_email: User's email for logging
-        
-    Returns:
-        SpideyAgent instance
-    """
-    # Use hash of API key + key_type as cache key (for security)
+    """Get existing agent from cache or create new one"""
     cache_key = hash(f"{api_key}_{key_type}")
     
     if cache_key in agent_cache:
         logger.info(f"Using cached agent for user: {user_email}")
         return agent_cache[cache_key]
     
-    logger.info(f"Creating new agent for user: {user_email} with key_type: {key_type}")
-    
-    # Create new agent with all available tools
-    tools = [create_email_drafts_tool]
+    logger.info(f"Creating new agent for user: {user_email}")
     
     try:
         agent = create_spidey_agent(
             api_key=api_key,
             key_type=key_type,
-            tools=tools,
-            temperature=0.7,
-            max_iterations=5,
-            verbose=True
+            temperature=0.7
         )
         
-        # Cache the agent
         agent_cache[cache_key] = agent
-        
         return agent
         
     except Exception as e:
         logger.error(f"Failed to create agent: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to initialize Spidey agent: {str(e)}"
+            detail=f"Failed to initialize agent: {str(e)}"
         )
 
 
-# ============================================================================
-# API Endpoints
-# ============================================================================
-
 @app.get("/")
 async def root():
-    """Root endpoint with service information"""
+    """Root endpoint"""
     return {
         "agent": "Spidey",
-        "version": "3.0.0",
-        "description": "Email Automation Agent powered by LangGraph",
-        "framework": "LangGraph + LangChain + FastAPI",
-        "capabilities": [
-            "Email draft creation",
-            "Lead generation assistance", 
-            "Job application support",
-            "Professional outreach",
-            "Email campaign planning",
-            "Email best practices guidance"
-        ],
+        "version": "3.1.0",
+        "description": "Email Automation Agent",
         "status": "operational"
     }
 
@@ -161,8 +120,7 @@ async def health_check():
     return {
         "status": "healthy",
         "agent": "Spidey",
-        "version": "3.0.0",
-        "framework": "LangGraph"
+        "version": "3.1.0"
     }
 
 
@@ -170,23 +128,12 @@ async def health_check():
 async def invoke_spidey(request: SpideyRequest):
     """
     Invoke Spidey agent to process user requests.
-    
-    This endpoint uses LangChain's ReAct agent framework to:
-    - Analyze user intent
-    - Decide which tools to use
-    - Execute multi-step workflows
-    - Provide conversational responses
-    
-    Args:
-        request: SpideyRequest with task, context, and credentials
-        
-    Returns:
-        SpideyResponse with agent's output
+    Uses the exact working pattern from test.py
     """
     try:
         logger.info(f"Received request from user: {request.user_email}")
         
-        # Validate inputs
+        # Validate email
         if not validate_email(request.user_email):
             raise HTTPException(
                 status_code=400,
@@ -216,7 +163,7 @@ async def invoke_spidey(request: SpideyRequest):
                 detail=f"Failed to fetch API key: {str(e)}"
             )
         
-        # Sanitize user input
+        # Sanitize input
         task = sanitize_input(request.task, max_length=5000)
         context = sanitize_input(request.context or "", max_length=2000)
         previous_convo = sanitize_input(request.previous_convo or "", max_length=5000)
@@ -230,38 +177,42 @@ async def invoke_spidey(request: SpideyRequest):
         # Get or create agent
         agent = get_or_create_agent(api_key, request.key_type, request.user_email)
         
-        # Build the full input with context
-        full_input = task
-        if context:
-            full_input = f"{task}\n\nContext: {context}"
+        # Build messages - exact pattern from test.py
+        messages = []
         
-        # Build chat history string
-        chat_history = ""
+        # Add previous conversation if exists
         if previous_convo:
-            chat_history = f"Previous conversation:\n{previous_convo}"
+            for line in previous_convo.split('\n'):
+                if line.startswith('User: '):
+                    messages.append(HumanMessage(content=line[6:]))
+                elif line.startswith('Spidey: '):
+                    from langchain.schema import AIMessage
+                    messages.append(AIMessage(content=line[8:]))
         
-        # Invoke the agent
+        # Build current message with context
+        current_message = task
+        if context:
+            current_message = f"{task}\n\nContext: {context}"
+        
+        # Add user email to message for tool execution
+        current_message = f"{current_message}\n\n[User email: {request.user_email}]"
+        messages.append(HumanMessage(content=current_message))
+        
+        # Invoke the agent - exact from test.py
         logger.info(f"Invoking agent with task: {task[:100]}...")
-        result = agent.invoke(
-            user_input=full_input,
-            chat_history=chat_history,
-            user_email=request.user_email
-        )
+        result = agent.invoke(messages)
         
-        # Process the agent's response
-        if not result.get("success"):
-            return SpideyResponse(
-                success=False,
-                message=result.get("response", "Sorry, I encountered an error processing your request."),
-                action_taken="error"
-            )
+        # Extract response
+        final_message = result[-1]
+        response_text = final_message.content if hasattr(final_message, 'content') else str(final_message)
         
-        # Return the agent's response directly
-        # The agent handles everything - no post-processing needed
+        # Check if tools were used
+        tool_used = any(hasattr(msg, 'tool_calls') and msg.tool_calls for msg in result)
+        
         return SpideyResponse(
             success=True,
-            message=result.get("response", ""),
-            action_taken=result.get("action_taken", "direct_response")
+            message=response_text,
+            action_taken="tool_execution" if tool_used else "direct_response"
         )
         
     except HTTPException:
@@ -270,19 +221,14 @@ async def invoke_spidey(request: SpideyRequest):
         logger.error(f"Error in invoke_spidey: {str(e)}")
         return SpideyResponse(
             success=False,
-            message=f"Oops! Something went wrong. Please try again or rephrase your request.",
+            message=f"Oops! Something went wrong. Please try again.",
             action_taken="error"
         )
 
 
-# ============================================================================
-# Server Startup
-# ============================================================================
-
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8004))
     logger.info(f"Starting Spidey MCP Server on port {port}")
-    logger.info("Powered by LangChain ReAct Agent Framework")
     
     uvicorn.run(
         "main:app",
@@ -291,3 +237,4 @@ if __name__ == "__main__":
         reload=False,
         log_level="info"
     )
+

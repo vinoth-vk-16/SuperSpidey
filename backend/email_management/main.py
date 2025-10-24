@@ -426,6 +426,42 @@ class RefreshEmailsResponse(BaseModel):
     emails_synced: int
     last_sync_timestamp: str
 
+class SpideyEmail(BaseModel):
+    messageId: str
+    threadId: str
+    to: List[str]  # To_email as requested
+    subject: str
+    body: str
+    isSent: bool
+    isRead: bool
+
+class FetchSpecificSpideyRequest(BaseModel):
+    user_email: str
+    thread_ids: List[str]  # List of thread IDs to fetch
+
+class FetchSpecificSpideyResponse(BaseModel):
+    emails: List[SpideyEmail]
+    total_count: int
+
+class FetchByDateSpideyRequest(BaseModel):
+    user_email: str
+    date: str  # ISO date string (YYYY-MM-DD)
+    end_date: Optional[str] = None  # Optional end date for range
+
+class FetchByDateSpideyResponse(BaseModel):
+    emails: List[SpideyEmail]
+    total_count: int
+
+class FetchEmailSpideyRequest(BaseModel):
+    user_email: str
+    page: int = 1  # Page number starting from 1
+
+class FetchEmailSpideyResponse(BaseModel):
+    emails: List[SpideyEmail]
+    total_count: int
+    page: int
+    has_more: bool
+
 class GmailWebhookRequest(BaseModel):
     message: Dict[str, Any]
     subscription: str
@@ -1692,6 +1728,156 @@ async def refresh_emails(request: RefreshEmailsRequest):
         print(f"Unexpected error in refresh-emails: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
+@app.get("/fetch-specific-spidey")
+async def fetch_specific_spidey(user_email: str, thread_ids: str):
+    """Fetch specific threads by thread IDs for a user with simplified email data"""
+    try:
+        # Parse thread_ids from comma-separated string
+        thread_id_list = [tid.strip() for tid in thread_ids.split(',') if tid.strip()]
+
+        if not thread_id_list:
+            return FetchSpecificSpideyResponse(emails=[], total_count=0)
+
+        # Reference to user's emails subcollection
+        emails_ref = db.collection('users').document(user_email).collection('emails')
+
+        # Query emails that belong to the specified thread IDs
+        emails = []
+        for thread_id in thread_id_list:
+            query = emails_ref.where('threadId', '==', thread_id)
+            for doc in query.stream():
+                email_data = doc.to_dict()
+
+                # Create simplified SpideyEmail object
+                spidey_email = SpideyEmail(
+                    messageId=email_data.get('messageId', ''),
+                    threadId=email_data.get('threadId', ''),
+                    to=email_data.get('to', []),
+                    subject=email_data.get('subject', ''),
+                    body=email_data.get('body', ''),
+                    isSent=email_data.get('isSent', False),
+                    isRead=email_data.get('isRead', False)
+                )
+                emails.append(spidey_email)
+
+        return FetchSpecificSpideyResponse(
+            emails=emails,
+            total_count=len(emails)
+        )
+
+    except Exception as e:
+        print(f"Error fetching specific threads for user {user_email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch specific threads: {str(e)}")
+
+@app.get("/fetch-by-date-spidey")
+async def fetch_by_date_spidey(user_email: str, date: str, end_date: Optional[str] = None):
+    """Fetch emails for a user by date or date range with simplified email data"""
+    try:
+        from datetime import datetime, timedelta
+
+        # Parse start date
+        try:
+            start_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
+
+        # Parse end date (if provided) or set to end of start date
+        if end_date:
+            try:
+                end_date_obj = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid end_date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
+        else:
+            # If no end_date, use end of the day
+            end_date_obj = start_date + timedelta(days=1)
+
+        # Reference to user's emails subcollection
+        emails_ref = db.collection('users').document(user_email).collection('emails')
+
+        # Query emails within the date range
+        query = emails_ref.where('timestamp', '>=', start_date).where('timestamp', '<=', end_date_obj)
+        emails = []
+
+        for doc in query.stream():
+            email_data = doc.to_dict()
+
+            # Create simplified SpideyEmail object
+            spidey_email = SpideyEmail(
+                messageId=email_data.get('messageId', ''),
+                threadId=email_data.get('threadId', ''),
+                to=email_data.get('to', []),
+                subject=email_data.get('subject', ''),
+                body=email_data.get('body', ''),
+                isSent=email_data.get('isSent', False),
+                isRead=email_data.get('isRead', False)
+            )
+            emails.append(spidey_email)
+
+        return FetchByDateSpideyResponse(
+            emails=emails,
+            total_count=len(emails)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching emails by date for user {user_email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch emails by date: {str(e)}")
+
+@app.get("/fetch-email-spidey")
+async def fetch_email_spidey(user_email: str, page: int = 1):
+    """Fetch paginated emails for a user with simplified email data (same as fetch-emails but simplified)"""
+    try:
+        # Validate page number
+        if page < 1:
+            raise HTTPException(status_code=400, detail="Page number must be 1 or greater")
+
+        # Reference to user's emails subcollection
+        emails_ref = db.collection('users').document(user_email).collection('emails')
+
+        # Get all emails first (since Firestore doesn't have efficient offset)
+        query = emails_ref.order_by('timestamp', direction=firestore.Query.DESCENDING)
+        all_emails = []
+        for doc in query.stream():
+            email_data = doc.to_dict()
+            all_emails.append(email_data)
+
+        # Apply pagination
+        per_page = 30
+        total_count = len(all_emails)
+        offset = (page - 1) * per_page
+        paginated_emails_data = all_emails[offset:offset + per_page]
+
+        # Convert to SpideyEmail objects
+        emails = []
+        for email_data in paginated_emails_data:
+            spidey_email = SpideyEmail(
+                messageId=email_data.get('messageId', ''),
+                threadId=email_data.get('threadId', ''),
+                to=email_data.get('to', []),
+                subject=email_data.get('subject', ''),
+                body=email_data.get('body', ''),
+                isSent=email_data.get('isSent', False),
+                isRead=email_data.get('isRead', False)
+            )
+            emails.append(spidey_email)
+
+        # Check if there are more pages
+        has_more = offset + per_page < total_count
+
+        return FetchEmailSpideyResponse(
+            emails=emails,
+            total_count=total_count,
+            page=page,
+            has_more=has_more
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching emails spidey for user {user_email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch emails: {str(e)}")
+
 @app.post("/gmail-webhook")
 async def gmail_webhook(request: GmailWebhookRequest):
     """Handle Gmail Pub/Sub notifications for real-time email sync"""
@@ -1906,20 +2092,27 @@ async def track_email_view(tracker_id: str, user_email: str, request: Request):
             matching_emails = query.stream()
 
             for email_doc in matching_emails:
-                email_ref = emails_ref.document(email_doc.id)
+                email_data = email_doc.to_dict()
+                email_from = email_data.get('from', '')
 
-                # Update email with view status and tracking data
-                email_ref.update({
-                    'view_status': True,
-                    'last_viewed': firestore.SERVER_TIMESTAMP,
-                    'view_tracking': firestore.ArrayUnion([{
-                        'ip': ip,
-                        'user_agent': user_agent,
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'viewed_at': datetime.utcnow().isoformat()
-                    }])
-                })
-                print(f"✅ Updated email view_status and logged tracking data for tracker {tracker_id}")
+                # Only mark as viewed if the viewer is NOT the sender
+                if user_email != email_from:
+                    email_ref = emails_ref.document(email_doc.id)
+
+                    # Update email with view status and tracking data
+                    email_ref.update({
+                        'view_status': True,
+                        'last_viewed': firestore.SERVER_TIMESTAMP,
+                        'view_tracking': firestore.ArrayUnion([{
+                            'ip': ip,
+                            'user_agent': user_agent,
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'viewed_at': datetime.utcnow().isoformat()
+                        }])
+                    })
+                    print(f"✅ Updated email view_status and logged tracking data for tracker {tracker_id} (viewed by {user_email})")
+                else:
+                    print(f"ℹ️ Email {tracker_id} viewed by sender {user_email}, not marking as viewed")
                 break
             else:
                 print(f"⚠️ Email not found for tracker {tracker_id}")
