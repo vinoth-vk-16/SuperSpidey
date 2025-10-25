@@ -27,17 +27,20 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         temperature=kwargs.get('temperature', 0.7)
     )
 
-    # Bind the tool - exact from test.py
+    # Bind the tool 
     model_with_tools = llm.bind_tools([create_email_drafts])
 
-    # Define functions - exact from test.py
+    # Define functions  
     def call_model(messages):
-        # Add system message - exact from test.py
+        
         content = """Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
         When creating drafts, follow the following rules:
         - When user describes his email, create the draft forming in the required format.
         - Create the subject and body of the email in the way user describes it.
         - User wont give the subject or body of the email, you need to create them based on the user's description.
+        - if user didnt give recipient email, you need to ask follow up questions to get the recipient email.
+        - if user didnt give the a clear purpose of the email, you need to ask follow up questions to get the purpose of the email.
+        - After creating draft say draft created sucessfully, check it in the draft section and ask what other you want to do.
         """
         system_msg = SystemMessage(content=content)
         full_messages = [system_msg] + messages
