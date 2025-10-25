@@ -193,18 +193,16 @@ async def check_keys_presence(user_email: str):
 
         data = doc.to_dict()
 
-        # Check if keys object exists
-        if 'keys' not in data:
-            return KeysPresenceResponse(
-                user_email=user_email,
-                available_keys=[]
-            )
-
-        # Get all available key types
-        available_keys = list(data['keys'].keys())
-
         # Get current selected key if it exists
         current_selected_key = data.get('current_selected_key')
+
+        # Look for keys with dotted notation (keys.gemini_api_key, keys.deepseek_v3_key, etc.)
+        available_keys = []
+        for field_name in data.keys():
+            if field_name.startswith('keys.'):
+                # Extract key_type from 'keys.key_type'
+                key_type = field_name[5:]  # Remove 'keys.' prefix
+                available_keys.append(key_type)
 
         return KeysPresenceResponse(
             user_email=user_email,

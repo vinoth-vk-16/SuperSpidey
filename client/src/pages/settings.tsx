@@ -117,7 +117,7 @@ export default function SettingsPage() {
     if (userKeysInfo) {
       const keyExists = userKeysInfo.available_keys.includes(selectedModel);
       if (keyExists) {
-        setApiKey('******'); // Show placeholder for existing keys
+        setApiKey('****************************************'); // Show longer placeholder for existing keys
         setIsApiSaved(true);
       } else {
         setApiKey(''); // Clear for new keys
@@ -474,32 +474,48 @@ export default function SettingsPage() {
                 API Key
               </Label>
                       <div className="relative">
-              <Input
-                id="apiKey"
-                type="password"
-                placeholder={isFetchingKeys ? 'Loading...' : `Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
-                value={apiKey}
-                          onChange={(e) => {
-                            setApiKey(e.target.value);
-                            setIsApiSaved(false);
-                          }}
-                          onFocus={() => {
-                            // Clear placeholder when user focuses on existing key
-                            if (apiKey === '******') {
-                              setApiKey('');
+                        <div className="flex gap-2">
+                          <Input
+                            id="apiKey"
+                            type="password"
+                            placeholder={isFetchingKeys ? 'Loading...' : `Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
+                            value={apiKey}
+                            onChange={(e) => {
+                              setApiKey(e.target.value);
                               setIsApiSaved(false);
-                            }
-                          }}
-                          disabled={isFetchingKeys}
-                          className="w-full pr-10 rounded-xl"
-                data-testid="input-api-key"
-              />
+                            }}
+                            onFocus={() => {
+                              // Clear placeholder when user focuses on existing key
+                              if (apiKey === '****************************************') {
+                                setApiKey('');
+                                setIsApiSaved(false);
+                              }
+                            }}
+                            disabled={isFetchingKeys}
+                            className="flex-1 rounded-xl"
+                            data-testid="input-api-key"
+                          />
+                          {userKeysInfo?.available_keys.includes(selectedModel) && apiKey === '****************************************' && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setApiKey('');
+                                setIsApiSaved(false);
+                              }}
+                              className="px-3 rounded-xl"
+                            >
+                              Edit
+                            </Button>
+                          )}
+                        </div>
                         {isFetchingKeys ? (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="absolute right-16 top-1/2 -translate-y-1/2">
                             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                           </div>
-                        ) : isApiSaved && !isApiLoading && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        ) : isApiSaved && !isApiLoading && apiKey !== '' && apiKey !== '****************************************' && (
+                          <div className="absolute right-16 top-1/2 -translate-y-1/2">
                             <Check className="w-4 h-4 text-green-600" />
                           </div>
                         )}

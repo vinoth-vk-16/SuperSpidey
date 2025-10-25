@@ -132,7 +132,7 @@ def list_available_keys(user_email: str) -> Dict[str, bool]:
 
         # Look for keys with dotted notation (keys.gemini_api_key, keys.deepseek_v3_key, etc.)
         available_keys = {}
-        for field_name, field_value in doc_data.items():
+        for field_name in doc_data.keys():
             if field_name.startswith('keys.'):
                 # Extract key_type from 'keys.key_type'
                 key_type = field_name[5:]  # Remove 'keys.' prefix
