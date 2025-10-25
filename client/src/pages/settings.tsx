@@ -37,6 +37,12 @@ const AI_MODELS = [
   { value: 'deepseek_v3_key', label: 'DeepSeek V3 (OpenRouter)' },
 ];
 
+interface UserKeysInfo {
+  user_email: string;
+  available_keys: string[];
+  current_selected_key: string | null;
+}
+
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('user-info');
@@ -44,7 +50,8 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState<string>('gemini_api_key');
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [isApiSaved, setIsApiSaved] = useState(false);
-  const [isFetchingKey, setIsFetchingKey] = useState(false);
+  const [isFetchingKeys, setIsFetchingKeys] = useState(false);
+  const [userKeysInfo, setUserKeysInfo] = useState<UserKeysInfo | null>(null);
   
   // User Info states
   const [userName, setUserName] = useState('');
@@ -80,44 +87,44 @@ export default function SettingsPage() {
     }
   }, [userInfoData]);
 
-  // Load model selection from localStorage
+  // Fetch user keys info on page load and when user changes
   useEffect(() => {
-    const savedModel = localStorage.getItem('ai-model-type') || 'gemini_api_key';
-    setSelectedModel(savedModel);
-  }, []);
-
-  // Save selected model to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem('ai-model-type', selectedModel);
-  }, [selectedModel]);
-
-  // Fetch and display API key for selected model
-  useEffect(() => {
-    const fetchApiKey = async () => {
+    const fetchUserKeys = async () => {
       if (!user?.email) return;
 
-      setIsFetchingKey(true);
+      setIsFetchingKeys(true);
       try {
-        const response = await fetch(`https://superspidey-oauth.onrender.com/get-key/${user.email}/${selectedModel}`);
+        const response = await fetch(`https://superspidey-oauth.onrender.com/check-keys/${user.email}`);
         if (response.ok) {
-          const data = await response.json();
-          setApiKey(data.key_value || '');
-          setIsApiSaved(true);
+          const data: UserKeysInfo = await response.json();
+          setUserKeysInfo(data);
+          setSelectedModel(data.current_selected_key || 'gemini_api_key');
         } else {
-          setApiKey('');
-          setIsApiSaved(false);
+          console.error('Error fetching user keys:', response.statusText);
         }
       } catch (error) {
-        console.error('Error fetching API key:', error);
-        setApiKey('');
-        setIsApiSaved(false);
+        console.error('Error fetching user keys:', error);
       } finally {
-        setIsFetchingKey(false);
+        setIsFetchingKeys(false);
       }
     };
 
-    fetchApiKey();
-  }, [selectedModel, user?.email]);
+    fetchUserKeys();
+  }, [user?.email]);
+
+  // Update key presence and placeholder when selected model changes
+  useEffect(() => {
+    if (userKeysInfo) {
+      const keyExists = userKeysInfo.available_keys.includes(selectedModel);
+      if (keyExists) {
+        setApiKey('******'); // Show placeholder for existing keys
+        setIsApiSaved(true);
+      } else {
+        setApiKey(''); // Clear for new keys
+        setIsApiSaved(false);
+      }
+    }
+  }, [selectedModel, userKeysInfo]);
 
   // Save/Update user info mutation
   const saveUserInfoMutation = useMutation({
@@ -162,8 +169,34 @@ export default function SettingsPage() {
     },
   });
 
+  // Handle model selection change - update current selected key
+  const handleModelChange = async (newModel: string) => {
+    setSelectedModel(newModel);
+
+    if (!user?.email) return;
+
+    try {
+      // Update the current selected key in backend
+      const response = await fetch(`https://superspidey-oauth.onrender.com/set-current-key/${user.email}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          current_selected_key: newModel,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to update current selected key');
+      }
+    } catch (error) {
+      console.error('Error updating current selected key:', error);
+    }
+  };
+
   const handleApiSave = async () => {
-    if (!apiKey.trim()) {
+    if (!apiKey.trim() || apiKey === '******') {
       toast({
         title: "Error",
         description: "Please enter a valid API key",
@@ -183,9 +216,9 @@ export default function SettingsPage() {
 
     setIsApiLoading(true);
     try {
-      // Store the API key in backend (encrypted in Firestore)
+      // Store the API key in backend (encrypted in Firestore) using PUT
       const response = await fetch('https://superspidey-oauth.onrender.com/store-key', {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -201,17 +234,44 @@ export default function SettingsPage() {
         throw new Error(errorData.detail || 'Failed to store API key');
       }
 
+      // Set this key as the current selected key
+      const setCurrentResponse = await fetch(`https://superspidey-oauth.onrender.com/set-current-key/${user.email}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          current_selected_key: selectedModel,
+        }),
+      });
+
+      if (!setCurrentResponse.ok) {
+        console.warn('Failed to set current key, but API key was saved');
+      }
+
       setIsApiSaved(true);
+
+      // Update local state
+      if (userKeysInfo) {
+        const updatedKeys = userKeysInfo.available_keys.includes(selectedModel)
+          ? userKeysInfo.available_keys
+          : [...userKeysInfo.available_keys, selectedModel];
+        setUserKeysInfo({
+          ...userKeysInfo,
+          available_keys: updatedKeys,
+          current_selected_key: selectedModel
+        });
+      }
 
       const modelLabel = AI_MODELS.find(m => m.value === selectedModel)?.label || 'AI model';
       toast({
         title: "Success",
-        description: `${modelLabel} API key saved successfully`,
+        description: `${modelLabel} API key saved and set as current`,
       });
     } catch (error) {
       console.error('Failed to save API key:', error);
       toast({
-        title: "Error", 
+        title: "Error",
         description: error instanceof Error ? error.message : "Failed to save API key",
         variant: "destructive"
       });
@@ -391,7 +451,7 @@ export default function SettingsPage() {
                       <Label htmlFor="aiModel" className="text-sm font-medium text-foreground mb-2 block">
                         AI Model
                       </Label>
-                      <Select value={selectedModel} onValueChange={setSelectedModel}>
+                      <Select value={selectedModel} onValueChange={handleModelChange}>
                         <SelectTrigger className="w-full rounded-xl">
                           <SelectValue placeholder="Select AI model" />
                         </SelectTrigger>
@@ -417,17 +477,24 @@ export default function SettingsPage() {
               <Input
                 id="apiKey"
                 type="password"
-                placeholder={isFetchingKey ? 'Loading...' : `Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
+                placeholder={isFetchingKeys ? 'Loading...' : `Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
                 value={apiKey}
                           onChange={(e) => {
                             setApiKey(e.target.value);
                             setIsApiSaved(false);
                           }}
-                          disabled={isFetchingKey}
+                          onFocus={() => {
+                            // Clear placeholder when user focuses on existing key
+                            if (apiKey === '******') {
+                              setApiKey('');
+                              setIsApiSaved(false);
+                            }
+                          }}
+                          disabled={isFetchingKeys}
                           className="w-full pr-10 rounded-xl"
                 data-testid="input-api-key"
               />
-                        {isFetchingKey ? (
+                        {isFetchingKeys ? (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                           </div>
@@ -446,7 +513,7 @@ export default function SettingsPage() {
                     <div className="flex justify-end pt-2">
             <Button
                         onClick={handleApiSave}
-                        disabled={isApiLoading || isFetchingKey}
+                        disabled={isApiLoading || isFetchingKeys}
                         className="btn-superhuman bg-primary hover:brightness-110 text-primary-foreground px-8"
               data-testid="button-save-api-key"
             >

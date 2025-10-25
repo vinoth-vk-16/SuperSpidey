@@ -16,22 +16,31 @@ load_dotenv()
 # Load Firebase service account key from environment
 service_key_env = os.getenv('service_key')
 if not service_key_env:
-    raise Exception("service_key environment variable not found. Make sure it's set in the .env file")
+    raise Exception("service_key environment variable not found. Make sure it's set in your deployment environment")
 
-firebase_credentials = json.loads(service_key_env)
-cred = credentials.Certificate(firebase_credentials)
-firebase_admin.initialize_app(cred)
+try:
+    firebase_credentials = json.loads(service_key_env)
+    cred = credentials.Certificate(firebase_credentials)
+    firebase_admin.initialize_app(cred)
+except Exception as e:
+    raise Exception(f"Failed to initialize Firebase: {str(e)}")
 
 # Initialize Firestore client
-db = firestore.client()
+try:
+    db = firestore.client()
+except Exception as e:
+    raise Exception(f"Failed to initialize Firestore client: {str(e)}")
 
 # Load encryption key from environment
 ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
 if not ENCRYPTION_KEY:
-    raise Exception("ENCRYPTION_KEY environment variable not found. Make sure it's set in the .env file")
+    raise Exception("ENCRYPTION_KEY environment variable not found. Make sure it's set in your deployment environment")
 
 # Create Fernet cipher instance
-cipher = Fernet(ENCRYPTION_KEY.encode())
+try:
+    cipher = Fernet(ENCRYPTION_KEY.encode())
+except Exception as e:
+    raise Exception(f"Failed to create encryption cipher: {str(e)}")
 
 def encrypt_key(key: str) -> str:
     """Encrypt a key using Fernet encryption"""
@@ -46,7 +55,7 @@ app = FastAPI(title="Google OAuth Storage Service", version="1.0.0")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5000", "https://superspidey-contact-remedy.onrender.com", "*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
