@@ -62,6 +62,7 @@ class SpideyRequest(BaseModel):
     task: str = Field(..., description="Task description")
     context: Optional[str] = Field(None, description="Additional context")
     previous_convo: Optional[str] = Field(None, description="Previous conversation history")
+    thread_ids: Optional[List[str]] = Field(None, description="Thread IDs to query (for conversation analysis)")
 
 
 class SpideyResponse(BaseModel):
@@ -193,7 +194,11 @@ async def invoke_spidey(request: SpideyRequest):
         current_message = task
         if context:
             current_message = f"{task}\n\nContext: {context}"
-        
+
+        # If thread_ids are provided, add instruction to query them
+        if request.thread_ids and len(request.thread_ids) > 0:
+            current_message = f"{current_message}\n\n[Please analyze these specific email threads: {', '.join(request.thread_ids)}. Use the query_email_threads tool to get the conversation data first, then answer my question about them.]"
+
         # Add user email to message for tool execution
         current_message = f"{current_message}\n\n[User email: {request.user_email}]"
         messages.append(HumanMessage(content=current_message))

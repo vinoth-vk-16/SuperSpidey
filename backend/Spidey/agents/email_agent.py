@@ -10,10 +10,12 @@ from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langchain_core.messages import ToolMessage
 from langgraph.graph import MessageGraph, END
 
-# Import tool from tools module
+# Import tools from tools module
 import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from tools.email_draft_tool import create_email_drafts
+from tools.query_email_threads import query_email_threads
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +29,34 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         temperature=kwargs.get('temperature', 0.7)
     )
 
-    # Bind the tool 
-    model_with_tools = llm.bind_tools([create_email_drafts])
+    # Bind both tools
+    model_with_tools = llm.bind_tools([create_email_drafts, query_email_threads])
 
     # Define functions  
     def call_model(messages):
         
         content = """Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
-        When creating drafts, follow the following rules:
+
+        TOOLS AVAILABLE:
+        - create_email_drafts: Create new email drafts
+        - query_email_threads: Analyze specific email conversations
+
+        WHEN TO USE TOOLS:
+        - Use create_email_drafts when user wants to compose or draft emails
+        - Use query_email_threads when user mentions specific thread IDs or wants to analyze conversations
+
+        CREATING DRAFTS:
         - When user describes his email, create the draft forming in the required format.
         - Create the subject and body of the email in the way user describes it.
         - User wont give the subject or body of the email, you need to create them based on the user's description.
         - if user didnt give recipient email, you need to ask follow up questions to get the recipient email.
         - if user didnt give the a clear purpose of the email, you need to ask follow up questions to get the purpose of the email.
         - After creating draft say draft created sucessfully, check it in the draft section and ask what other you want to do.
+
+        ANALYZING CONVERSATIONS:
+        - When user provides thread IDs, use query_email_threads to get the conversation data
+        - Then analyze the conversation and answer their questions about it
+        - Be helpful in summarizing, explaining, or providing insights about the email threads
         """
         system_msg = SystemMessage(content=content)
         full_messages = [system_msg] + messages
@@ -84,6 +100,9 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
                 
                 if tool_name == "create_email_drafts":
                     result = create_email_drafts.invoke(tool_args)
+                    results.append((result, tool_id))
+                elif tool_name == "query_email_threads":
+                    result = query_email_threads.invoke(tool_args)
                     results.append((result, tool_id))
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")

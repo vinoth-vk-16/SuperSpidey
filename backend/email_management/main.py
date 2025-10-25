@@ -440,7 +440,7 @@ class FetchSpecificSpideyRequest(BaseModel):
     thread_ids: List[str]  # List of thread IDs to fetch
 
 class FetchSpecificSpideyResponse(BaseModel):
-    threads: List[SpideyThreadGroup]
+    threads: List["SpideyThreadGroup"]
     total_count: int
 
 class FetchByDateSpideyRequest(BaseModel):
@@ -449,7 +449,7 @@ class FetchByDateSpideyRequest(BaseModel):
     end_date: Optional[str] = None  # Optional end date for range
 
 class FetchByDateSpideyResponse(BaseModel):
-    emails: List[SpideyEmail]
+    threads: List["SpideyThreadGroup"]
     total_count: int
 
 class FetchEmailSpideyRequest(BaseModel):
@@ -466,13 +466,13 @@ class SpideyThreadGroup(BaseModel):
     messages: List[SpideyEmail]
 
 class FetchEmailSpideyResponse(BaseModel):
-    threads: List[SpideyThreadGroup]
+    threads: List["SpideyThreadGroup"]
     total_count: int
     page: int
     has_more: bool
 
 class FetchByDateSpideyResponse(BaseModel):
-    threads: List[SpideyThreadGroup]
+    threads: List["SpideyThreadGroup"]
     total_count: int
 
 class GmailWebhookRequest(BaseModel):

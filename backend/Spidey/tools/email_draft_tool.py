@@ -9,11 +9,14 @@ import os
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# API URL for email management
-API_URL = os.getenv(
+# Base API URL for email management
+BASE_API_URL = os.getenv(
     "EMAIL_MANAGEMENT_BASE_URL",
     "https://superspidey-email-management.onrender.com"
- ) + "/create-multi-draft"
+)
+
+# API URL for creating drafts
+API_URL = BASE_API_URL + "/create-multi-draft"
 
 
 # Tool definition - exact from test.py
