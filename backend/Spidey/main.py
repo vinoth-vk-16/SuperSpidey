@@ -62,6 +62,7 @@ class SpideyRequest(BaseModel):
     task: str = Field(..., description="Task description")
     previous_convo: Optional[str] = Field(None, description="Previous conversation history")
     thread_ids: Optional[List[str]] = Field(None, description="Thread IDs to query (for conversation analysis)")
+    page: Optional[int] = Field(1, description="Page number for email fetching (default: 1)")
 
 
 class SpideyResponse(BaseModel):
@@ -191,12 +192,16 @@ async def invoke_spidey(request: SpideyRequest):
         # Build current message
         current_message = task
 
-        # If thread_ids are provided, add instruction to query them
+        # Add context based on what's being asked
         if request.thread_ids and len(request.thread_ids) > 0:
+            # Specific thread analysis
             current_message = f"{current_message}\n\n[Please analyze these specific email threads: {', '.join(request.thread_ids)}. Use the query_email_threads tool to get the conversation data first, then answer my question about them.]"
+        elif any(keyword in task.lower() for keyword in ['summarize', 'summary', 'recent', 'emails', 'sent', 'received', 'unread', 'view', 'show me']):
+            # General email summarization - use page fetching
+            current_message = f"{current_message}\n\n[This appears to be a general email summarization request. Use the fetch_emails_page tool with page {request.page} to get the current page of emails, then summarize or answer the user's question about their emails.]"
 
-        # Add user email to message for tool execution
-        current_message = f"{current_message}\n\n[User email: {request.user_email}]"
+        # Add user email and page info to message for tool execution
+        current_message = f"{current_message}\n\n[User email: {request.user_email}, Current page: {request.page}]"
         messages.append(HumanMessage(content=current_message))
         
         # Invoke the agent - exact from test.py

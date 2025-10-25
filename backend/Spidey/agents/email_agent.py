@@ -16,7 +16,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from tools.email_draft_tool import create_email_drafts
 from tools.query_email_threads import query_email_threads
-from tools.fetch_email_by_date import fetch_email_by_date, get_current_date_for_llm
+from tools.fetch_emails_page import fetch_emails_page
 
 logger = logging.getLogger(__name__)
 
@@ -31,32 +31,22 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
     )
 
     # Bind all three tools
-    model_with_tools = llm.bind_tools([create_email_drafts, query_email_threads, fetch_email_by_date])
+    model_with_tools = llm.bind_tools([create_email_drafts, query_email_threads, fetch_emails_page])
 
-    # Define functions
+    # Define functions  
     def call_model(messages):
-        # Fetch current date dynamically for each conversation
-        current_date_info = get_current_date_for_llm()
-
-        content = f"""Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
-
+        
+        content = """Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
 
         TOOLS AVAILABLE:
         - create_email_drafts: Create new email drafts
-        - query_email_threads: Analyze specific email conversations by thread ID
-        - fetch_email_by_date: Fetch and analyze emails from specific dates or date ranges
+        - query_email_threads: Analyze specific email conversations by thread IDs
+        - fetch_emails_page: Fetch and analyze general email summaries from current page
 
         WHEN TO USE TOOLS:
         - Use create_email_drafts when user wants to compose or draft emails
-        - Use query_email_threads when user mentions specific thread IDs or wants to analyze conversations
-        - Use fetch_email_by_date when user asks about emails from dates (calculate proper ISO dates using current date above)
-
-        DATE CALCULATIONS:
-        When using fetch_email_by_date, always calculate proper ISO date format (YYYY-MM-DD):
-        - "today" = current date
-        - "yesterday" = current date= {current_date_info} minus 1 day
-        - "last week" = current date= {current_date_info} minus 7 days (as start_date) to current date (as end_date)
-        - "last 3 days" = current date= {current_date_info} minus 3 days (as start_date) to current date (as end_date)
+        - Use query_email_threads when user provides specific thread IDs to analyze( when user didnt provide thread id use fetch_emails_page that give complete content)
+        - Use fetch_emails_page when user asks general questions about their emails (summarize, show recent, check unread, etc.) without specific thread IDs
 
         CREATING DRAFTS:
         - When user describes his email, create the draft forming in the required format.
@@ -71,9 +61,15 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         - Then analyze the conversation and answer their questions about it
         - Be helpful in summarizing, explaining, or providing insights about the email threads
 
-        Rules:
-        -Never ask current date, thread id from the user.
+        GENERAL EMAIL SUMMARIZATION:
+        - When user asks general questions like "summarize my recent emails", "summarize emails in the current page", "show me unread emails", "what emails have I sent", use fetch_emails_page
+        - Focus on the most recent emails (top 5-10) for summarization
+        - Provide helpful summaries, statistics, or answers about their email activity
+        - For summarization requests, prioritize showing recent activity and key insights
 
+        rules:
+        - Never ask for current page, thread id from the user.
+        - Never ask threadid as follow up questions.
         """
         system_msg = SystemMessage(content=content)
         full_messages = [system_msg] + messages
@@ -121,8 +117,8 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
                 elif tool_name == "query_email_threads":
                     result = query_email_threads.invoke(tool_args)
                     results.append((result, tool_id))
-                elif tool_name == "fetch_email_by_date":
-                    result = fetch_email_by_date.invoke(tool_args)
+                elif tool_name == "fetch_emails_page":
+                    result = fetch_emails_page.invoke(tool_args)
                     results.append((result, tool_id))
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")

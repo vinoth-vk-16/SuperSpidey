@@ -174,7 +174,8 @@ Spidey/
 ├── tools/
 │   ├── __init__.py
 │   ├── email_draft_tool.py      # create_email_drafts tool
-│   └── query_email_threads.py   # query_email_threads tool
+│   ├── query_email_threads.py   # query_email_threads tool
+│   └── fetch_emails_page.py     # fetch_emails_page tool
 ├── agents/
 │   ├── __init__.py
 │   ├── email_agent.py           # Agent using exact test.py pattern
@@ -249,7 +250,8 @@ The server will start on `http://localhost:8004` (or your specified PORT).
   "key_type": "gemini_api_key",
   "task": "Create an email draft to john@example.com about our new product",
   "previous_convo": "Optional previous conversation history...",
-  "thread_ids": ["thread123", "thread456"]  // Optional for conversation analysis
+  "thread_ids": ["thread123", "thread456"],  // Optional: for specific thread analysis
+  "page": 1  // Optional: page for general email fetching (default: 1)
 }
 ```
 
@@ -308,6 +310,24 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 {
   "success": true,
   "message": "The customer complained about delivery delays and poor product quality...",
+  "action_taken": "tool_execution"
+}
+```
+
+**General Email Summarization:**
+```json
+// Request
+{
+  "user_email": "user@example.com",
+  "key_type": "gemini_api_key",
+  "task": "Summarize my recent emails and show me any unread ones",
+  "page": 1
+}
+
+// Response
+{
+  "success": true,
+  "message": "You have 15 recent emails, 3 unread. Top recent emails include...",
   "action_taken": "tool_execution"
 }
 ```
@@ -379,7 +399,7 @@ Set these environment variables:
 ### LLM-Driven Agent
 - **No hardcoded rules** - LLM autonomously decides when to use tools
 - **Exact working pattern** from `test.py` for reliability
-- **Two tools**: `create_email_drafts` and `query_email_threads`
+- **Three tools**: `create_email_drafts`, `query_email_threads`, `fetch_emails_page`
 
 ### Workflow
 ```
