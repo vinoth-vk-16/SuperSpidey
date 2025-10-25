@@ -1,23 +1,22 @@
-# 🕷️ Spidey - Multi-Model Email Automation Agent
+# 🕷️ Spidey - Email Automation Agent
 
-Spidey is an intelligent MCP (Model Context Protocol) server built with **LangGraph State Machine Framework**, **FastAPI**, and **multiple AI models**. It specializes in email automation, lead generation, and professional outreach using secure encrypted API key storage and a **truly agentic LLM-driven tool selection** approach.
+Spidey is an intelligent email automation agent built with **LangGraph State Machine Framework** and **FastAPI**. It specializes in email draft creation and conversation analysis using secure encrypted API key storage and LLM-driven tool selection.
 
-**Version 3.0.0** - LLM-Driven Tool Selection (No More Hardcoded Rules!)
+**Version 3.1.0** - Production Ready (Exact Working Pattern from test.py)
 
 ## 🚀 Features
 
 ### 🤖 AI & Agent Features
-- **Multi-Model Support**: Choose between Gemini (Google) and DeepSeek (OpenRouter)
-- **LLM-Driven Tool Selection**: LLM autonomously decides when to use tools via `bind_tools()` - NO hardcoded keyword matching!
-- **Intelligent Agent Framework**: LangGraph StateGraph for robust workflow management and state tracking
-- **Conversational Interface**: Natural dialogue for clarifying requirements and gathering information
-- **Autonomous Decision Making**: LLM extracts parameters, decides tool usage, and generates content dynamically
+- **LLM-Driven Tool Selection**: LLM autonomously decides when to use tools via `bind_tools()` - NO hardcoded rules!
+- **Exact Working Pattern**: Uses the proven working pattern from test.py
+- **Intelligent Agent Framework**: LangGraph StateGraph for robust workflow management
+- **Conversational Interface**: Natural dialogue for email assistance
 
 ### 📧 Email Automation
-- **Email Draft Creation**: Generate multiple personalized email drafts with tool-based execution
-- **Lead Generation**: Craft compelling outreach emails for potential clients
-- **Job Applications**: Assist with job application emails and follow-ups
-- **Professional Guidance**: Provide email best practices and strategic advice
+- **Email Draft Creation**: Generate personalized email drafts using `create_email_drafts` tool
+- **Conversation Analysis**: Analyze specific email threads using `query_email_threads` tool
+- **Thread-Based Queries**: Ask questions about specific email conversations
+- **Professional Guidance**: Provide email writing assistance and best practices
 
 ### 🔐 Security & Architecture
 - **Secure API Key Storage**: Encrypted keys stored in Firestore, decrypted server-side
@@ -27,15 +26,14 @@ Spidey is an intelligent MCP (Model Context Protocol) server built with **LangGr
 ## 🛠️ Technology Stack
 
 ### 🤖 AI Models
-- **Google Gemini**: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro`
-- **DeepSeek v3**: `deepseek/deepseek-chat-v3-0324:free` (via OpenRouter)
+- **Google Gemini**: `gemini-2.5-flash-lite` (primary working model)
 
 ### 🏗️ Framework & Infrastructure
-- **FastAPI**: Modern web framework for the MCP server
+- **FastAPI**: Modern web framework for the API server
 - **LangGraph**: State-based agent orchestration framework
-  - `StateGraph`: For managing agent state and workflows
-  - `State`: TypedDict-based state management for conversations
-  - `StructuredTool`: For type-safe tool definitions
+  - `MessageGraph`: For managing conversation flows
+  - `ToolNode`: For tool execution
+  - `StateGraph`: For workflow management
 - **LangChain**: Foundation for AI model interactions and tool binding
 - **Firebase/Firestore**: Secure encrypted API key storage
 - **Cryptography**: Fernet encryption for API keys
@@ -171,27 +169,26 @@ class AgentState(TypedDict):
 
 ```
 Spidey/
-├── main.py                      # FastAPI server and agent management
+├── main.py                      # FastAPI server with Firestore integration
+├── test.py                      # Original working test script
 ├── tools/
 │   ├── __init__.py
-│   └── email_draft_tool.py      # LangChain tool for draft creation
+│   ├── email_draft_tool.py      # create_email_drafts tool
+│   └── query_email_threads.py   # query_email_threads tool
 ├── agents/
 │   ├── __init__.py
-│   ├── email_agent.py           # LangGraph state-based agent implementation
-│   └── model_factory.py         # AI model factory (Gemini/DeepSeek)
+│   ├── email_agent.py           # Agent using exact test.py pattern
+│   └── model_factory.py         # AI model initialization
 ├── utils/
 │   ├── __init__.py
-│   ├── helpers.py               # Utility functions
+│   ├── helpers.py               # Input validation utilities
 │   ├── encryption.py            # Fernet encryption utilities
 │   └── firestore_keys.py        # Firestore API key management
 ├── requirements.txt             # Python dependencies
-├── test_langchain_agent.py      # Test suite (now uses LangGraph)
-├── API_KEY_STORAGE.md          # API key storage guide
-├── DEPLOYMENT.md               # Deployment guide
-├── GET_API_KEY.md             # API key setup guide
-├── CHANGELOG_v2.3.0.md        # Version changelog
-├── MIGRATION_SUMMARY.md       # Migration guide
-└── README.md                   # This file
+├── ARCHITECTURE.md              # Complete architecture documentation
+├── SIMPLIFICATION_v3.1.md       # Version 3.1 changes
+├── README.md                    # This file
+└── CHANGELOG_v3.0.0.md          # Version 3.0 changelog
 ```
 
 ## 📦 Installation
@@ -243,141 +240,172 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 
 ### API Endpoints
 
-#### POST /invoke
-Main agent interaction endpoint using LangGraph's intelligent StateGraph workflow.
+#### POST /invoke - Main Agent Endpoint
 
-**Request Body**:
+**Request:**
 ```json
 {
   "user_email": "user@example.com",
   "key_type": "gemini_api_key",
-  "task": "Create outreach emails for potential clients in the tech industry",
-  "context": "I'm a freelance web developer looking for new projects",
-  "previous_convo": "Optional: Previous conversation history"
+  "task": "Create an email draft to john@example.com about our new product",
+  "previous_convo": "Optional previous conversation history...",
+  "thread_ids": ["thread123", "thread456"]  // Optional for conversation analysis
 }
 ```
 
-**Required Parameters:**
-- `user_email`: User's email address (used for tool execution and context)
-- `key_type`: AI model selection
-- `task`: User's request or message
-
-**Supported key_type values:**
-- `"gemini_api_key"` - Uses Google Gemini models
-- `"deepseek_v3_key"` - Uses DeepSeek v3 via OpenRouter
-
-**Note:** API keys are stored encrypted in Firestore using dotted notation (`keys.key_type`) and fetched automatically. Never send actual API keys in requests!
-
-**Smart Response Types:**
-
-**For Email Draft Creation** (Auto-executes `create_email_drafts` tool):
+**Response:**
 ```json
 {
   "success": true,
-  "response": "✅ Successfully created 2 email draft(s) for you!\n📝 Recipients: john@gmail.com, jane@gmail.com",
-  "action_taken": "tool_execution",
-  "intermediate_steps": [],
-  "tool_result": {
-    "drafts_created": 2,
-    "draft_ids": ["abc-123", "def-456"]
-  }
+  "message": "✅ I've created your email draft! You can review it in your drafts section.",
+  "action_taken": "tool_execution"
 }
 ```
 
-**For General Assistance** (Conversational response):
+**Parameters:**
+- `user_email` (required): User's email address for tool execution
+- `key_type` (required): `"gemini_api_key"` for Google Gemini
+- `task` (required): User's request or message
+- `previous_convo` (optional): Previous conversation history
+- `thread_ids` (optional): Array of thread IDs for conversation analysis
+
+**Features:**
+- LLM-driven tool selection (no hardcoded rules)
+- Automatic thread analysis when thread_ids provided
+- Secure API key fetching from Firestore
+- LangGraph StateGraph workflow management
+
+**Tool Usage Examples:**
+
+**Email Draft Creation:**
 ```json
+// Request
+{
+  "user_email": "user@example.com",
+  "key_type": "gemini_api_key",
+  "task": "Create an email to john@example.com about our new product"
+}
+
+// Response
 {
   "success": true,
-  "response": "👋 Hi! I'm Spidey, your email buddy. I love helping with emails - whether you need to write professional outreach emails, apply for jobs, or just get better at email communication.\n\nWhat kind of email help do you need today?",
-  "action_taken": "agent_execution",
-  "intermediate_steps": []
+  "message": "✅ I've created your email draft! Check your drafts section.",
+  "action_taken": "tool_execution"
 }
 ```
 
-**Response for Direct Advice** (Agent responds without tools):
+**Conversation Analysis:**
 ```json
+// Request
+{
+  "user_email": "user@example.com",
+  "key_type": "gemini_api_key",
+  "task": "What did the customer complain about?",
+  "thread_ids": ["thread123"]
+}
+
+// Response
 {
   "success": true,
-  "message": "Here are some tips for writing effective cold emails:\n1. Keep subject lines under 50 characters...",
-  "action_taken": "agent_execution",
-  "drafts_created": null,
-  "draft_ids": null
+  "message": "The customer complained about delivery delays and poor product quality...",
+  "action_taken": "tool_execution"
 }
 ```
 
-**Response for Greeting**:
+**General Email Advice:**
 ```json
+// Request
+{
+  "user_email": "user@example.com",
+  "key_type": "gemini_api_key",
+  "task": "How should I write a follow-up email?"
+}
+
+// Response
 {
   "success": true,
-  "message": "👋 Hi! I'm Spidey, your email buddy. I love helping with emails...",
-  "action_taken": "agent_execution",
-  "drafts_created": null,
-  "draft_ids": null
+  "message": "For follow-up emails, reference your previous conversation...",
+  "action_taken": "direct_response"
 }
 ```
 
-#### GET /health
-Health check endpoint.
-
-**Response**:
+#### GET /health - Health Check
 ```json
 {
   "status": "healthy",
   "agent": "Spidey",
-  "version": "2.0.0",
-  "framework": "LangChain"
+  "version": "3.1.0",
+  "framework": "LangGraph"
 }
 ```
 
-#### GET /
-Root endpoint with agent information and capabilities.
-
-## 🧠 LangGraph Agent Architecture
-
-### Multi-Model Support
-
-Spidey supports multiple AI models with automatic selection:
-
-- **Gemini** (Google): Professional, accurate, paid models
-- **DeepSeek v3** (via OpenRouter): Fast, cost-effective, free tier available
-
-Models are selected based on `key_type` in the request and automatically fall back if unavailable.
-
-### State-Based Agent Pattern
-
-Spidey uses LangGraph's **StateGraph** pattern for intelligent workflow management:
-
-```
-User Request → Intent Detection → Tool Execution (if needed) → LLM Response → Final Answer
+#### GET / - Service Info
+```json
+{
+  "agent": "Spidey",
+  "version": "3.1.0",
+  "description": "Email Automation Agent powered by LangGraph",
+  "framework": "LangGraph + LangChain + FastAPI",
+  "capabilities": [
+    "Email draft creation",
+    "Lead generation assistance",
+    "Job application support",
+    "Professional outreach",
+    "Email campaign planning",
+    "Email best practices guidance"
+  ],
+  "status": "operational"
+}
 ```
 
-### Agent Workflow:
+## 🚀 Deployment
 
-1. **Request**: User sends task with `key_type` and `user_email`
-2. **State Init**: AgentState created with message history, user context, and metadata
-3. **Intent Analysis**: Detects if request involves email draft creation or general assistance
-4. **Key Fetch**: Encrypted API key retrieved from Firestore using dotted notation (`keys.key_type`)
-5. **Model Init**: Appropriate AI model initialized (Gemini/DeepSeek)
-6. **Smart Tool Execution**:
-   - **Draft Creation**: Automatically extracts recipient emails, builds draft objects, executes `create_email_drafts` tool
-   - **Conversational**: Provides guidance, tips, and email best practices
-7. **Response Generation**: Returns appropriate response based on execution type
-8. **Error Handling**: Graceful fallbacks for API issues and tool execution failures
+### Local Development
+```bash
+cd backend/Spidey
+pip install -r requirements.txt
+python main.py
+```
 
-### State Management:
+### Production (Render)
+Set these environment variables:
+- `service_key`: Firebase service account JSON (as string)
+- `ENCRYPTION_KEY`: Fernet encryption key
+- `EMAIL_MANAGEMENT_BASE_URL`: Email service URL
+- `PORT`: Server port (default: 8004)
 
-- **AgentState**: TypedDict managing conversation messages, user context, and execution metadata
-- **Message History**: Tracks HumanMessage and AIMessage sequences with conversation context
-- **User Context**: Maintains `user_email` for tool execution and personalized responses
-- **Tool Awareness**: Intelligent detection of draft creation requests vs. general assistance
+## 🎯 Architecture Summary
 
-### Smart Tool Execution
+### LLM-Driven Agent
+- **No hardcoded rules** - LLM autonomously decides when to use tools
+- **Exact working pattern** from `test.py` for reliability
+- **Two tools**: `create_email_drafts` and `query_email_threads`
 
-Spidey intelligently detects and executes tools based on user intent:
+### Workflow
+```
+User Input → LangGraph Agent → LLM decides → Tool execution (if needed) → Response
+```
 
-#### `create_email_drafts` (Auto-Executed)
-- **Type**: `StructuredTool` with automatic parameter extraction
-- **Description**: Creates multiple email drafts via email management API
+### Key Features
+- ✅ **Thread analysis**: Ask questions about specific email conversations
+- ✅ **Draft creation**: Generate personalized email drafts
+- ✅ **Secure**: Encrypted API keys in Firestore
+- ✅ **FastAPI**: Production-ready REST API
+- ✅ **Type safety**: Full Pydantic validation
+
+---
+
+## 📚 Documentation
+
+- `ARCHITECTURE.md` - Complete technical architecture
+- `SIMPLIFICATION_v3.1.md` - Version 3.1 changes
+- `CHANGELOG_v3.0.0.md` - Migration guide
+- `test.py` - Original working pattern
+
+---
+
+**Version**: 3.1.0
+**Status**: Production Ready 🚀
 - **Automatic Detection**: Uses keyword analysis to identify draft creation requests
 - **Smart Parameter Extraction**:
   - Extracts recipient emails from user messages using regex patterns

@@ -1815,32 +1815,76 @@ async def fetch_by_date_spidey(user_email: str, date: str, end_date: Optional[st
     try:
         from datetime import datetime, timedelta
 
-        # Parse start date
+        # Parse start date - ensure UTC timezone
         try:
-            start_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+            # Handle both date-only and datetime formats
+            if 'T' in date:
+                start_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+            else:
+                # Date only, assume start of day UTC
+                start_date = datetime.fromisoformat(f"{date}T00:00:00+00:00")
+
+            # Ensure UTC timezone
+            if start_date.tzinfo is None:
+                from datetime import timezone
+                start_date = start_date.replace(tzinfo=timezone.utc)
+
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
 
         # Parse end date (if provided) or set to end of start date
         if end_date:
             try:
-                end_date_obj = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                if 'T' in end_date:
+                    end_date_obj = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                else:
+                    # Date only, assume end of day UTC
+                    end_date_obj = datetime.fromisoformat(f"{end_date}T23:59:59+00:00")
+
+                # Ensure UTC timezone
+                if end_date_obj.tzinfo is None:
+                    from datetime import timezone
+                    end_date_obj = end_date_obj.replace(tzinfo=timezone.utc)
+
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid end_date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
         else:
-            # If no end_date, use end of the day
+            # If no end_date, use end of start date
             end_date_obj = start_date + timedelta(days=1)
 
         # Reference to user's emails subcollection
         emails_ref = db.collection('users').document(user_email).collection('emails')
 
+        # First, check if there are any emails at all (debug)
+        all_docs_query = emails_ref.limit(5)
+        print("Checking first 5 emails in database:")
+        for doc in all_docs_query.stream():
+            email_data = doc.to_dict()
+            print(f"Email {email_data.get('messageId')}: timestamp = {email_data.get('timestamp')} (type: {type(email_data.get('timestamp'))})")
+
         # Query emails within the date range
+        print(f"Querying emails between {start_date} and {end_date_obj}")
         query = emails_ref.where('timestamp', '>=', start_date).where('timestamp', '<=', end_date_obj)
         all_emails = []
 
         for doc in query.stream():
             email_data = doc.to_dict()
+            print(f"Found email: {email_data.get('messageId')} with timestamp: {email_data.get('timestamp')}")
             all_emails.append(email_data)
+
+        print(f"Total emails found: {len(all_emails)}")
+
+        # If no results with date filter, try without filter to see if data exists
+        if len(all_emails) == 0:
+            print("No emails found with date filter, checking all emails...")
+            all_query = emails_ref.stream()
+            all_count = 0
+            for doc in all_query:
+                all_count += 1
+                if all_count <= 3:  # Show first 3
+                    email_data = doc.to_dict()
+                    print(f"All emails - {email_data.get('messageId')}: {email_data.get('timestamp')}")
+            print(f"Total emails in database: {all_count}")
 
         # Group emails by thread
         thread_groups = {}

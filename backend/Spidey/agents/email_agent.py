@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from tools.email_draft_tool import create_email_drafts
 from tools.query_email_threads import query_email_threads
+from tools.fetch_email_by_date import fetch_email_by_date, get_current_date_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -29,21 +30,33 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         temperature=kwargs.get('temperature', 0.7)
     )
 
-    # Bind both tools
-    model_with_tools = llm.bind_tools([create_email_drafts, query_email_threads])
+    # Bind all three tools
+    model_with_tools = llm.bind_tools([create_email_drafts, query_email_threads, fetch_email_by_date])
 
-    # Define functions  
+    # Define functions
     def call_model(messages):
-        
-        content = """Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
+        # Fetch current date dynamically for each conversation
+        current_date_info = get_current_date_for_llm()
+
+        content = f"""Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
+
 
         TOOLS AVAILABLE:
         - create_email_drafts: Create new email drafts
-        - query_email_threads: Analyze specific email conversations
+        - query_email_threads: Analyze specific email conversations by thread ID
+        - fetch_email_by_date: Fetch and analyze emails from specific dates or date ranges
 
         WHEN TO USE TOOLS:
         - Use create_email_drafts when user wants to compose or draft emails
         - Use query_email_threads when user mentions specific thread IDs or wants to analyze conversations
+        - Use fetch_email_by_date when user asks about emails from dates (calculate proper ISO dates using current date above)
+
+        DATE CALCULATIONS:
+        When using fetch_email_by_date, always calculate proper ISO date format (YYYY-MM-DD):
+        - "today" = current date
+        - "yesterday" = current date= {current_date_info} minus 1 day
+        - "last week" = current date= {current_date_info} minus 7 days (as start_date) to current date (as end_date)
+        - "last 3 days" = current date= {current_date_info} minus 3 days (as start_date) to current date (as end_date)
 
         CREATING DRAFTS:
         - When user describes his email, create the draft forming in the required format.
@@ -57,6 +70,10 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         - When user provides thread IDs, use query_email_threads to get the conversation data
         - Then analyze the conversation and answer their questions about it
         - Be helpful in summarizing, explaining, or providing insights about the email threads
+
+        Rules:
+        -Never ask current date, thread id from the user.
+
         """
         system_msg = SystemMessage(content=content)
         full_messages = [system_msg] + messages
@@ -103,6 +120,9 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
                     results.append((result, tool_id))
                 elif tool_name == "query_email_threads":
                     result = query_email_threads.invoke(tool_args)
+                    results.append((result, tool_id))
+                elif tool_name == "fetch_email_by_date":
+                    result = fetch_email_by_date.invoke(tool_args)
                     results.append((result, tool_id))
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")

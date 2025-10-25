@@ -5,7 +5,7 @@ Uses the exact working pattern from test.py with FastAPI and Firestore integrati
 """
 
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,7 +60,6 @@ class SpideyRequest(BaseModel):
     user_email: str = Field(..., description="User's email address")
     key_type: str = Field(..., description="Type of AI key: 'gemini_api_key' or 'deepseek_v3_key'")
     task: str = Field(..., description="Task description")
-    context: Optional[str] = Field(None, description="Additional context")
     previous_convo: Optional[str] = Field(None, description="Previous conversation history")
     thread_ids: Optional[List[str]] = Field(None, description="Thread IDs to query (for conversation analysis)")
 
@@ -166,8 +165,7 @@ async def invoke_spidey(request: SpideyRequest):
         
         # Sanitize input
         task = sanitize_input(request.task, max_length=5000)
-        context = sanitize_input(request.context or "", max_length=2000)
-        previous_convo = sanitize_input(request.previous_convo or "", max_length=5000)
+        previous_convo = sanitize_input(request.previous_convo or "", max_length=10000)
         
         if not task:
             raise HTTPException(
@@ -190,10 +188,8 @@ async def invoke_spidey(request: SpideyRequest):
                     from langchain.schema import AIMessage
                     messages.append(AIMessage(content=line[8:]))
         
-        # Build current message with context
+        # Build current message
         current_message = task
-        if context:
-            current_message = f"{task}\n\nContext: {context}"
 
         # If thread_ids are provided, add instruction to query them
         if request.thread_ids and len(request.thread_ids) > 0:
