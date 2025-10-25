@@ -664,7 +664,7 @@ Returns a 1x1 transparent PNG pixel image.
 ```
 
 ### GET /fetch-specific-spidey
-Fetch emails belonging to specific thread IDs for a user with simplified email data. Returns only essential fields for lightweight API responses.
+Fetch specific threads by thread IDs for a user with simplified email data grouped by thread.
 
 **URL Parameters:**
 - `user_email`: The email address of the user (required)
@@ -680,15 +680,34 @@ GET /fetch-specific-spidey?user_email=user@example.com&thread_ids=thread123,thre
 **Response:**
 ```json
 {
-  "emails": [
+  "threads": [
     {
-      "messageId": "msg123",
       "threadId": "thread123",
-      "to": ["recipient@example.com"],
       "subject": "Email Subject",
-      "body": "Full email content...",
-      "isSent": false,
-      "isRead": false
+      "from_": "recipient@example.com",
+      "timestamp": "",
+      "messageCount": 2,
+      "isRead": false,
+      "messages": [
+        {
+          "messageId": "msg456",
+          "threadId": "thread123",
+          "to": ["recipient@example.com"],
+          "subject": "Email Subject",
+          "body": "Full email content...",
+          "isSent": false,
+          "isRead": false
+        },
+        {
+          "messageId": "msg789",
+          "threadId": "thread123",
+          "to": ["recipient@example.com"],
+          "subject": "Re: Email Subject",
+          "body": "Reply content...",
+          "isSent": true,
+          "isRead": true
+        }
+      ]
     }
   ],
   "total_count": 1
@@ -697,15 +716,16 @@ GET /fetch-specific-spidey?user_email=user@example.com&thread_ids=thread123,thre
 
 **Features:**
 - Fetches emails from multiple specified threads in one request
+- Groups emails by thread with complete thread context
 - Returns simplified email data with only essential fields
 - Efficient Firestore queries using threadId filtering
-- Useful for loading specific conversations or threads
+- Useful for loading specific conversations or threads with thread-level metadata
 
 **Error Responses:**
 - `500`: Failed to fetch specific threads
 
 ### GET /fetch-by-date-spidey
-Fetch emails for a user by specific date or date range with simplified email data.
+Fetch emails for a user by specific date or date range grouped by thread with simplified email data.
 
 **URL Parameters:**
 - `user_email`: The email address of the user (required)
@@ -726,15 +746,34 @@ GET /fetch-by-date-spidey?user_email=user@example.com&date=2024-10-24&end_date=2
 **Response:**
 ```json
 {
-  "emails": [
+  "threads": [
     {
-      "messageId": "msg123",
       "threadId": "thread123",
-      "to": ["recipient@example.com"],
       "subject": "Email Subject",
-      "body": "Full email content...",
-      "isSent": false,
-      "isRead": false
+      "from_": "recipient@example.com",
+      "timestamp": "",
+      "messageCount": 2,
+      "isRead": false,
+      "messages": [
+        {
+          "messageId": "msg456",
+          "threadId": "thread123",
+          "to": ["recipient@example.com"],
+          "subject": "Email Subject",
+          "body": "Full email content...",
+          "isSent": false,
+          "isRead": false
+        },
+        {
+          "messageId": "msg789",
+          "threadId": "thread123",
+          "to": ["recipient@example.com"],
+          "subject": "Re: Email Subject",
+          "body": "Reply content...",
+          "isSent": true,
+          "isRead": true
+        }
+      ]
     }
   ],
   "total_count": 1
@@ -743,16 +782,17 @@ GET /fetch-by-date-spidey?user_email=user@example.com&date=2024-10-24&end_date=2
 
 **Features:**
 - Supports both single date and date range queries
+- Groups emails by conversation thread (like Gmail conversations)
 - Uses Firestore timestamp range queries for optimal performance
 - Returns simplified email data with only essential fields
-- Useful for date-based email filtering and analytics
+- Useful for date-based email filtering and analytics with thread context
 
 **Error Responses:**
 - `400`: Invalid date format (must be ISO format)
 - `500`: Failed to fetch emails by date
 
 ### GET /fetch-email-spidey
-Fetch paginated emails for a user with simplified email data (same pagination logic as `/fetch-emails` but with reduced response size).
+Fetch paginated emails for a user grouped by thread with simplified email data (same logic as `/fetch-emails` but with simplified fields).
 
 **URL Parameters:**
 - `user_email`: The email address of the user (required)
@@ -768,15 +808,34 @@ GET /fetch-email-spidey?user_email=user@example.com&page=1
 **Response:**
 ```json
 {
-  "emails": [
+  "threads": [
     {
-      "messageId": "msg123",
       "threadId": "thread123",
-      "to": ["recipient@example.com"],
       "subject": "Email Subject",
-      "body": "Full email content...",
-      "isSent": false,
-      "isRead": false
+      "from_": "recipient@example.com",
+      "timestamp": "",
+      "messageCount": 2,
+      "isRead": false,
+      "messages": [
+        {
+          "messageId": "msg456",
+          "threadId": "thread123",
+          "to": ["recipient@example.com"],
+          "subject": "Email Subject",
+          "body": "Full email content...",
+          "isSent": false,
+          "isRead": false
+        },
+        {
+          "messageId": "msg789",
+          "threadId": "thread123",
+          "to": ["recipient@example.com"],
+          "subject": "Re: Email Subject",
+          "body": "Reply content...",
+          "isSent": true,
+          "isRead": true
+        }
+      ]
     }
   ],
   "total_count": 45,
@@ -786,11 +845,12 @@ GET /fetch-email-spidey?user_email=user@example.com&page=1
 ```
 
 **Features:**
-- Same pagination logic as `/fetch-emails` (30 emails per page)
+- Same pagination logic as `/fetch-emails` (30 threads per page)
+- Groups emails by conversation thread (like Gmail conversations)
 - Returns simplified email data with only essential fields
-- Sorted by timestamp (newest first)
+- Sorted by thread timestamp (newest first)
 - Includes pagination metadata (`total_count`, `page`, `has_more`)
-- Lightweight alternative to full thread-based fetching
+- Lightweight alternative to full thread-based fetching with complete thread context
 
 **Error Responses:**
 - `400`: Invalid page number (must be 1 or greater)

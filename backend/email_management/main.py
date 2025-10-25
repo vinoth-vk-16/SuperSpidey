@@ -440,7 +440,7 @@ class FetchSpecificSpideyRequest(BaseModel):
     thread_ids: List[str]  # List of thread IDs to fetch
 
 class FetchSpecificSpideyResponse(BaseModel):
-    emails: List[SpideyEmail]
+    threads: List[SpideyThreadGroup]
     total_count: int
 
 class FetchByDateSpideyRequest(BaseModel):
@@ -456,11 +456,24 @@ class FetchEmailSpideyRequest(BaseModel):
     user_email: str
     page: int = 1  # Page number starting from 1
 
+class SpideyThreadGroup(BaseModel):
+    threadId: str
+    subject: str
+    from_: str  # 'from' is a reserved keyword in Python
+    timestamp: str  # Latest message timestamp
+    messageCount: int
+    isRead: bool  # True if all messages in thread are read
+    messages: List[SpideyEmail]
+
 class FetchEmailSpideyResponse(BaseModel):
-    emails: List[SpideyEmail]
+    threads: List[SpideyThreadGroup]
     total_count: int
     page: int
     has_more: bool
+
+class FetchByDateSpideyResponse(BaseModel):
+    threads: List[SpideyThreadGroup]
+    total_count: int
 
 class GmailWebhookRequest(BaseModel):
     message: Dict[str, Any]
@@ -1736,19 +1749,19 @@ async def fetch_specific_spidey(user_email: str, thread_ids: str):
         thread_id_list = [tid.strip() for tid in thread_ids.split(',') if tid.strip()]
 
         if not thread_id_list:
-            return FetchSpecificSpideyResponse(emails=[], total_count=0)
+            return FetchSpecificSpideyResponse(threads=[], total_count=0)
 
         # Reference to user's emails subcollection
         emails_ref = db.collection('users').document(user_email).collection('emails')
 
-        # Query emails that belong to the specified thread IDs
-        emails = []
+        # Group emails by thread
+        thread_groups = {}
         for thread_id in thread_id_list:
             query = emails_ref.where('threadId', '==', thread_id)
             for doc in query.stream():
                 email_data = doc.to_dict()
 
-                # Create simplified SpideyEmail object
+                # Create SpideyEmail object
                 spidey_email = SpideyEmail(
                     messageId=email_data.get('messageId', ''),
                     threadId=email_data.get('threadId', ''),
@@ -1758,11 +1771,38 @@ async def fetch_specific_spidey(user_email: str, thread_ids: str):
                     isSent=email_data.get('isSent', False),
                     isRead=email_data.get('isRead', False)
                 )
-                emails.append(spidey_email)
+
+                if thread_id not in thread_groups:
+                    thread_groups[thread_id] = []
+                thread_groups[thread_id].append(spidey_email)
+
+        # Convert thread groups to SpideyThreadGroup objects
+        threads = []
+        for thread_id, messages in thread_groups.items():
+            if not messages:
+                continue
+
+            # Sort messages by timestamp (newest first)
+            messages.sort(key=lambda x: x.messageId, reverse=True)  # Sort by messageId as proxy for timestamp
+
+            # Thread info from the latest message
+            latest_message = messages[0]
+            all_read = all(msg.isRead for msg in messages)
+
+            thread_group = SpideyThreadGroup(
+                threadId=thread_id,
+                subject=latest_message.subject,
+                from_=latest_message.to[0] if latest_message.to else '',  # Use recipient as "from" for sent emails
+                timestamp='',  # Simplified - not including timestamp in response
+                messageCount=len(messages),
+                isRead=all_read,
+                messages=messages
+            )
+            threads.append(thread_group)
 
         return FetchSpecificSpideyResponse(
-            emails=emails,
-            total_count=len(emails)
+            threads=threads,
+            total_count=len(threads)
         )
 
     except Exception as e:
@@ -1771,7 +1811,7 @@ async def fetch_specific_spidey(user_email: str, thread_ids: str):
 
 @app.get("/fetch-by-date-spidey")
 async def fetch_by_date_spidey(user_email: str, date: str, end_date: Optional[str] = None):
-    """Fetch emails for a user by date or date range with simplified email data"""
+    """Fetch emails for a user by date or date range grouped by thread with simplified email data"""
     try:
         from datetime import datetime, timedelta
 
@@ -1796,26 +1836,61 @@ async def fetch_by_date_spidey(user_email: str, date: str, end_date: Optional[st
 
         # Query emails within the date range
         query = emails_ref.where('timestamp', '>=', start_date).where('timestamp', '<=', end_date_obj)
-        emails = []
+        all_emails = []
 
         for doc in query.stream():
             email_data = doc.to_dict()
+            all_emails.append(email_data)
 
-            # Create simplified SpideyEmail object
+        # Group emails by thread
+        thread_groups = {}
+        for email_data in all_emails:
+            thread_id = email_data.get('threadId', email_data.get('messageId', ''))
+            if thread_id not in thread_groups:
+                thread_groups[thread_id] = []
+
+            # Create SpideyEmail object
             spidey_email = SpideyEmail(
                 messageId=email_data.get('messageId', ''),
-                threadId=email_data.get('threadId', ''),
+                threadId=thread_id,
                 to=email_data.get('to', []),
                 subject=email_data.get('subject', ''),
                 body=email_data.get('body', ''),
                 isSent=email_data.get('isSent', False),
                 isRead=email_data.get('isRead', False)
             )
-            emails.append(spidey_email)
+            thread_groups[thread_id].append(spidey_email)
+
+        # Convert thread groups to SpideyThreadGroup objects
+        threads = []
+        for thread_id, messages in thread_groups.items():
+            if not messages:
+                continue
+
+            # Sort messages by timestamp (newest first)
+            messages.sort(key=lambda x: x.messageId, reverse=True)  # Sort by messageId as proxy for timestamp
+
+            # Thread info from the latest message
+            latest_message = messages[0]
+            all_read = all(msg.isRead for msg in messages)
+
+            thread_group = SpideyThreadGroup(
+                threadId=thread_id,
+                subject=latest_message.subject,
+                from_=latest_message.to[0] if latest_message.to else '',  # Use recipient as "from" for sent emails
+                timestamp='',  # Simplified - not including timestamp in response
+                messageCount=len(messages),
+                isRead=all_read,
+                messages=messages
+            )
+            threads.append(thread_group)
+
+        # Sort threads by latest message timestamp (simplified - using thread_id as proxy)
+        threads.sort(key=lambda x: x.threadId, reverse=True)
 
         return FetchByDateSpideyResponse(
-            emails=emails,
-            total_count=len(emails)
+            threads=threads,
+            total_count=len(threads)
         )
 
     except HTTPException:
@@ -1826,7 +1901,7 @@ async def fetch_by_date_spidey(user_email: str, date: str, end_date: Optional[st
 
 @app.get("/fetch-email-spidey")
 async def fetch_email_spidey(user_email: str, page: int = 1):
-    """Fetch paginated emails for a user with simplified email data (same as fetch-emails but simplified)"""
+    """Fetch paginated emails for a user grouped by thread with simplified email data"""
     try:
         # Validate page number
         if page < 1:
@@ -1842,31 +1917,63 @@ async def fetch_email_spidey(user_email: str, page: int = 1):
             email_data = doc.to_dict()
             all_emails.append(email_data)
 
-        # Apply pagination
-        per_page = 30
-        total_count = len(all_emails)
-        offset = (page - 1) * per_page
-        paginated_emails_data = all_emails[offset:offset + per_page]
+        # Group emails by thread
+        thread_groups = {}
+        for email_data in all_emails:
+            thread_id = email_data.get('threadId', email_data.get('messageId', ''))
+            if thread_id not in thread_groups:
+                thread_groups[thread_id] = []
 
-        # Convert to SpideyEmail objects
-        emails = []
-        for email_data in paginated_emails_data:
+            # Create SpideyEmail object
             spidey_email = SpideyEmail(
                 messageId=email_data.get('messageId', ''),
-                threadId=email_data.get('threadId', ''),
+                threadId=thread_id,
                 to=email_data.get('to', []),
                 subject=email_data.get('subject', ''),
                 body=email_data.get('body', ''),
                 isSent=email_data.get('isSent', False),
                 isRead=email_data.get('isRead', False)
             )
-            emails.append(spidey_email)
+            thread_groups[thread_id].append(spidey_email)
+
+        # Convert thread groups to SpideyThreadGroup objects
+        threads = []
+        for thread_id, messages in thread_groups.items():
+            if not messages:
+                continue
+
+            # Sort messages by timestamp (newest first)
+            messages.sort(key=lambda x: x.messageId, reverse=True)  # Sort by messageId as proxy for timestamp
+
+            # Thread info from the latest message
+            latest_message = messages[0]
+            all_read = all(msg.isRead for msg in messages)
+
+            thread_group = SpideyThreadGroup(
+                threadId=thread_id,
+                subject=latest_message.subject,
+                from_=latest_message.to[0] if latest_message.to else '',  # Use recipient as "from" for sent emails
+                timestamp='',  # Simplified - not including timestamp in response
+                messageCount=len(messages),
+                isRead=all_read,
+                messages=messages
+            )
+            threads.append(thread_group)
+
+        # Sort threads by latest message timestamp (simplified - using thread_id as proxy)
+        threads.sort(key=lambda x: x.threadId, reverse=True)
+
+        # Apply pagination at thread level
+        per_page = 30
+        total_count = len(threads)
+        offset = (page - 1) * per_page
+        paginated_threads = threads[offset:offset + per_page]
 
         # Check if there are more pages
         has_more = offset + per_page < total_count
 
         return FetchEmailSpideyResponse(
-            emails=emails,
+            threads=paginated_threads,
             total_count=total_count,
             page=page,
             has_more=has_more
