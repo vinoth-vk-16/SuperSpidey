@@ -60,7 +60,7 @@ def create_gemini_model(api_key: str, model_name: str = "gemini-1.5-flash", temp
     )
 
 
-def create_openai_model(api_key: str, model_name: str = "gpt-4o-mini", temperature: float = 0.7):
+def create_openai_model(api_key: str, model_name: str = "gpt-4.1-mini", temperature: float = 0.7):
     """
     Create an OpenAI LLM instance.
 

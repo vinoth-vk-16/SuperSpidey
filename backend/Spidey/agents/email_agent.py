@@ -17,16 +17,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from tools.email_draft_tool import create_email_drafts
 from tools.query_email_threads import query_email_threads
 from tools.fetch_emails_page import fetch_emails_page
+from .model_factory import create_llm_from_key_type
 
 logger = logging.getLogger(__name__)
 
 
 def create_spidey_agent(api_key: str, key_type: str, **kwargs):
-    
-    # Use the exact same model setup as test.py
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
-        google_api_key=api_key,
+
+    # Create appropriate LLM based on key type
+    llm = create_llm_from_key_type(
+        api_key=api_key,
+        key_type=key_type,
         temperature=kwargs.get('temperature', 0.7)
     )
 
@@ -38,7 +39,7 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         
         content = """Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
 
-        TOOLS AVAILABLE:
+        TOOLS AVAILABLE(use only when required for greetings, guidance about emails reply directly):
         - create_email_drafts: Create new email drafts
         - query_email_threads: Analyze specific email conversations by thread IDs
         - fetch_emails_page: Fetch and analyze general email summaries from current page
@@ -46,7 +47,7 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         WHEN TO USE TOOLS:
         - Use create_email_drafts when user wants to compose or draft emails
         - Use query_email_threads when user provides specific thread IDs to analyze( when user didnt provide thread id use fetch_emails_page that give complete content)
-        - Use fetch_emails_page when user asks general questions about their emails (summarize, show recent, check unread, etc.) without specific thread IDs
+        - Use fetch_emails_page when user ask about current page or when users ask about their emails, their read status use this tool, explicity when they didnt use thread ID's
 
         CREATING DRAFTS:
         - When user describes his email, create the draft forming in the required format.
@@ -62,7 +63,7 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         - Be helpful in summarizing, explaining, or providing insights about the email threads
 
         GENERAL EMAIL SUMMARIZATION:
-        - When user asks general questions like "summarize my recent emails", "summarize emails in the current page", "show me unread emails", "what emails have I sent", use fetch_emails_page
+        - When user asks questions like "summarize my recent emails", "summarize emails in the current page", "show me unread emails", "what emails have I sent", use fetch_emails_page
         - Focus on the most recent emails (top 5-10) for summarization
         - Provide helpful summaries, statistics, or answers about their email activity
         - For summarization requests, prioritize showing recent activity and key insights
@@ -70,6 +71,8 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
         rules:
         - Never ask for current page, thread id from the user.
         - Never ask threadid as follow up questions.
+        - Never always call the tools
+        - Use tools only when required For greetings, guidance about emails reply directly
         """
         system_msg = SystemMessage(content=content)
         full_messages = [system_msg] + messages
