@@ -170,6 +170,24 @@ print("Google OAuth Config loaded:", {
     "redirectURI": google_config.get('redirect_uris', ['NOT_SET'])[1] if len(google_config.get('redirect_uris', [])) > 1 else 'NOT_SET'
 })
 
+def clean_subject_from_body(body: str, subject: str) -> str:
+    """Clean the body content to remove subject lines that match the provided subject"""
+    cleaned = body.strip()
+
+    # Remove subject lines that match the provided subject (case insensitive)
+    # This handles cases where AI includes "Subject: [subject]" at the beginning of body
+    subject_pattern = f'^Subject:\\s*{re.escape(subject)}\\s*$'
+    cleaned = re.sub(subject_pattern, '', cleaned, flags=re.MULTILINE | re.IGNORECASE)
+
+    # Also remove any generic subject lines
+    cleaned = re.sub(r'^Subject:\s*.*\n?', '', cleaned, flags=re.MULTILINE | re.IGNORECASE)
+
+    # Clean up extra whitespace
+    cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)  # Multiple blank lines to double
+
+    return cleaned.strip()
+
+
 def clean_response_text(text: str) -> str:
     """Clean raw response text and remove subject lines"""
     cleaned = text.strip()
@@ -313,9 +331,11 @@ The body should be a complete email with proper closing like "Thanks" or "Best r
             parsed_response = json.loads(cleaned_text)
 
             if parsed_response.get('body') and parsed_response.get('subject'):
+                # Clean the body to remove any subject lines that might be included
+                cleaned_body = clean_subject_from_body(parsed_response['body'], parsed_response['subject'])
                 return {
                     'subject': parsed_response['subject'],
-                    'body': parsed_response['body']
+                    'body': cleaned_body
                 }
             elif parsed_response.get('body'):
                 return {
