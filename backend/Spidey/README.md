@@ -22,7 +22,7 @@ Spidey is an intelligent email automation agent built with **LangGraph State Mac
 - **Secure API Key Storage**: Encrypted keys stored in Firestore, decrypted server-side
 - **Per-Request Authentication**: API keys never stored in memory or exposed to frontend
 - **Multi-Tenant Ready**: Each user has isolated encrypted keys
-- **Automatic Key Selection**: Uses user's currently selected API key (gemini_api_key or deepseek_v3_key)
+- **Automatic Key Selection**: Uses user's currently selected API key (gemini_api_key or open_ai_key)
 
 ## 🛠️ Technology Stack
 
@@ -275,7 +275,7 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 - Automatic thread analysis when thread_ids provided
 - Secure API key fetching from Firestore (uses user's currently selected key)
 - LangGraph StateGraph workflow management
-- Automatic key type detection (gemini_api_key or deepseek_v3_key)
+- Automatic key type detection (gemini_api_key or open_ai_key)
 
 **Tool Usage Examples:**
 

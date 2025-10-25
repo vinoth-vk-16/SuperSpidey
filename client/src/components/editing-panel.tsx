@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 interface EditingPanelProps {
   emailText: string;
@@ -25,14 +26,11 @@ const suggestions = [
 export default function EditingPanel({ emailText, onTextUpdate, onClose }: EditingPanelProps) {
   const [customPrompt, setCustomPrompt] = useState('');
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const improveMutation = useMutation({
     mutationFn: async ({ text, action }: { text: string; action: string }) => {
-      const apiKey = localStorage.getItem('gemini-api-key');
-      if (!apiKey) {
-        throw new Error('No API key found');
-      }
-      // Call external email management service directly
+      // Call external email management service directly - API key handled by backend
       const response = await fetch('https://superspidey-email-management.onrender.com/improve-email', {
         method: 'POST',
         headers: {
@@ -41,14 +39,14 @@ export default function EditingPanel({ emailText, onTextUpdate, onClose }: Editi
         body: JSON.stringify({
           text,
           action,
-          api_key: apiKey
+          user_email: user?.email
         }),
       });
       if (!response.ok) {
         throw new Error('Failed to improve email');
       }
       const data = await response.json();
-      return { improvedText: data.improved_text };
+      return { improvedText: data.body || data.improved_text };
     },
     onSuccess: (data) => {
       onTextUpdate(data.improvedText);

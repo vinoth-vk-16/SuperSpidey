@@ -34,7 +34,7 @@ const WRITING_STYLES = [
 
 const AI_MODELS = [
   { value: 'gemini_api_key', label: 'Google Gemini' },
-  { value: 'deepseek_v3_key', label: 'DeepSeek V3 (OpenRouter)' },
+  { value: 'open_ai_key', label: 'OpenAI GPT' },
 ];
 
 interface UserKeysInfo {
@@ -52,6 +52,7 @@ export default function SettingsPage() {
   const [isApiSaved, setIsApiSaved] = useState(false);
   const [isFetchingKeys, setIsFetchingKeys] = useState(false);
   const [userKeysInfo, setUserKeysInfo] = useState<UserKeysInfo | null>(null);
+  const [isEditingKey, setIsEditingKey] = useState(false);
   
   // User Info states
   const [userName, setUserName] = useState('');
@@ -116,15 +117,19 @@ export default function SettingsPage() {
   useEffect(() => {
     if (userKeysInfo) {
       const keyExists = userKeysInfo.available_keys.includes(selectedModel);
-      if (keyExists) {
+      if (keyExists && !isEditingKey) {
         setApiKey('****************************************'); // Show longer placeholder for existing keys
         setIsApiSaved(true);
+      } else if (keyExists && isEditingKey) {
+        // Keep the current edit state
+        setIsApiSaved(false);
       } else {
         setApiKey(''); // Clear for new keys
         setIsApiSaved(false);
+        setIsEditingKey(false);
       }
     }
-  }, [selectedModel, userKeysInfo]);
+  }, [selectedModel, userKeysInfo, isEditingKey]);
 
   // Save/Update user info mutation
   const saveUserInfoMutation = useMutation({
@@ -172,6 +177,7 @@ export default function SettingsPage() {
   // Handle model selection change - update current selected key
   const handleModelChange = async (newModel: string) => {
     setSelectedModel(newModel);
+    setIsEditingKey(false); // Reset edit state when switching models
 
     if (!user?.email) return;
 
@@ -196,7 +202,7 @@ export default function SettingsPage() {
   };
 
   const handleApiSave = async () => {
-    if (!apiKey.trim() || apiKey === '******') {
+    if (!apiKey.trim() || apiKey === '****************************************') {
       toast({
         title: "Error",
         description: "Please enter a valid API key",
@@ -250,6 +256,7 @@ export default function SettingsPage() {
       }
 
       setIsApiSaved(true);
+      setIsEditingKey(false); // Reset edit state after successful save
 
       // Update local state
       if (userKeysInfo) {
@@ -278,6 +285,12 @@ export default function SettingsPage() {
     } finally {
       setIsApiLoading(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingKey(false);
+    setApiKey('****************************************'); // Restore placeholder
+    setIsApiSaved(true);
   };
 
   const handleUserInfoSave = () => {
@@ -495,7 +508,7 @@ export default function SettingsPage() {
                             className="flex-1 rounded-xl"
                             data-testid="input-api-key"
                           />
-                          {userKeysInfo?.available_keys.includes(selectedModel) && apiKey === '****************************************' && (
+                          {userKeysInfo?.available_keys.includes(selectedModel) && apiKey === '****************************************' && !isEditingKey && (
                             <Button
                               type="button"
                               variant="outline"
@@ -503,19 +516,31 @@ export default function SettingsPage() {
                               onClick={() => {
                                 setApiKey('');
                                 setIsApiSaved(false);
+                                setIsEditingKey(true);
                               }}
                               className="px-3 rounded-xl"
                             >
                               Edit
                             </Button>
                           )}
+                          {isEditingKey && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCancelEdit}
+                              className="px-3 rounded-xl"
+                            >
+                              Cancel
+                            </Button>
+                          )}
                         </div>
                         {isFetchingKeys ? (
-                          <div className="absolute right-16 top-1/2 -translate-y-1/2">
+                          <div className="absolute right-28 top-1/2 -translate-y-1/2">
                             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                           </div>
                         ) : isApiSaved && !isApiLoading && apiKey !== '' && apiKey !== '****************************************' && (
-                          <div className="absolute right-16 top-1/2 -translate-y-1/2">
+                          <div className="absolute right-28 top-1/2 -translate-y-1/2">
                             <Check className="w-4 h-4 text-green-600" />
                           </div>
                         )}
@@ -529,7 +554,7 @@ export default function SettingsPage() {
                     <div className="flex justify-end pt-2">
             <Button
                         onClick={handleApiSave}
-                        disabled={isApiLoading || isFetchingKeys}
+                        disabled={isApiLoading || isFetchingKeys || (!isEditingKey && userKeysInfo?.available_keys.includes(selectedModel))}
                         className="btn-superhuman bg-primary hover:brightness-110 text-primary-foreground px-8"
               data-testid="button-save-api-key"
             >
@@ -607,12 +632,12 @@ export default function SettingsPage() {
                           <span>
                     Visit{' '}
                     <a
-                      href="https://openrouter.ai/keys"
+                      href="https://platform.openai.com/api-keys"
                       target="_blank"
                       rel="noopener noreferrer"
                               className="text-primary hover:underline inline-flex items-center"
                     >
-                      OpenRouter API Keys
+                      OpenAI API Keys
                               <ExternalLink className="w-3 h-3 ml-1" />
                             </a>
                           </span>
@@ -621,13 +646,13 @@ export default function SettingsPage() {
                           <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
                             2
                           </span>
-                          <span>Sign in or create an OpenRouter account</span>
+                          <span>Sign in to your OpenAI account</span>
                         </li>
                         <li className="flex items-start space-x-3">
                           <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
                             3
                           </span>
-                          <span>Click "Create Key" and add credits to your account</span>
+                          <span>Click "Create new secret key"</span>
                         </li>
                         <li className="flex items-start space-x-3">
                           <span className="flex-shrink-0 w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-semibold">
@@ -653,9 +678,9 @@ export default function SettingsPage() {
                         </>
                       ) : (
                         <>
-                          The DeepSeek V3 API (via OpenRouter) provides powerful AI capabilities for email composition, 
-                          smart replies, and content improvement. Your key is stored securely in your browser 
-                          and is only used to communicate with OpenRouter's API services.
+                          The OpenAI GPT API provides powerful AI capabilities for email composition,
+                          smart replies, and content improvement. Your key is stored securely in your browser
+                          and is only used to communicate with OpenAI's API services.
                         </>
                       )}
                     </p>

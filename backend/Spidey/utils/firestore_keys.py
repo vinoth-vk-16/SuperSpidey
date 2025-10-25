@@ -67,7 +67,7 @@ def fetch_api_key(user_email: str, key_type: str) -> Optional[str]:
     
     Args:
         user_email: User's email (document ID in google_oauth_credentials)
-        key_type: Type of key to fetch (e.g., 'gemini_api_key', 'deepseek_v3_key')
+        key_type: Type of key to fetch (e.g., 'gemini_api_key', 'open_ai_key')
         
     Returns:
         Decrypted API key string, or None if not found
@@ -130,7 +130,7 @@ def list_available_keys(user_email: str) -> Dict[str, bool]:
 
         doc_data = doc.to_dict()
 
-        # Look for keys with dotted notation (keys.gemini_api_key, keys.deepseek_v3_key, etc.)
+        # Look for keys with dotted notation (keys.gemini_api_key, keys.open_ai_key, etc.)
         available_keys = {}
         for field_name in doc_data.keys():
             if field_name.startswith('keys.'):
@@ -153,7 +153,7 @@ def get_user_selected_key(user_email: str) -> str:
         user_email: User's email
 
     Returns:
-        Selected key type (e.g., 'gemini_api_key', 'deepseek_v3_key')
+        Selected key type (e.g., 'gemini_api_key', 'open_ai_key')
 
     Raises:
         ValueError: If user not found or no key selected
@@ -178,7 +178,7 @@ def get_user_selected_key(user_email: str) -> str:
             raise ValueError(f"No API key selected for user {user_email}. Please select an API key first.")
 
         # Validate it's one of the allowed key types
-        allowed_keys = ["gemini_api_key", "deepseek_v3_key"]
+        allowed_keys = ["gemini_api_key", "open_ai_key"]
         if selected_key not in allowed_keys:
             logger.error(f"Invalid selected key type '{selected_key}' for user: {user_email}")
             raise ValueError(f"Invalid selected key type '{selected_key}' for user {user_email}")

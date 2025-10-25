@@ -60,30 +60,28 @@ def create_gemini_model(api_key: str, model_name: str = "gemini-1.5-flash", temp
     )
 
 
-def create_deepseek_model(api_key: str, model_name: str = "deepseek/deepseek-chat-v3-0324:free", temperature: float = 0.7):
+def create_openai_model(api_key: str, model_name: str = "gpt-4o-mini", temperature: float = 0.7):
     """
-    Create a DeepSeek LLM instance via OpenRouter.
-    
+    Create an OpenAI LLM instance.
+
     Args:
-        api_key: OpenRouter API key
-        model_name: DeepSeek model name on OpenRouter
+        api_key: OpenAI API key
+        model_name: OpenAI model name
         temperature: Response temperature
-        
+
     Returns:
-        ChatOpenAI instance configured for OpenRouter
+        ChatOpenAI instance configured for OpenAI
     """
     try:
         llm = ChatOpenAI(
             model=model_name,
             openai_api_key=api_key,
-            openai_api_base="https://openrouter.ai/api/v1",
-            temperature=temperature,
-            model_kwargs={}
+            temperature=temperature
         )
-        logger.info(f"✅ Successfully initialized DeepSeek model: {model_name}")
+        logger.info(f"✅ Successfully initialized OpenAI model: {model_name}")
         return llm
     except Exception as e:
-        logger.error(f"❌ Failed to initialize DeepSeek model: {str(e)}")
+        logger.error(f"❌ Failed to initialize OpenAI model: {str(e)}")
         raise
 
 
@@ -97,7 +95,7 @@ def create_llm_from_key_type(
     
     Args:
         api_key: API key for the provider
-        key_type: Type of key ('gemini_api_key' or 'deepseek_v3_key')
+        key_type: Type of key ('gemini_api_key' or 'open_ai_key')
         temperature: Response temperature
         
     Returns:
@@ -108,11 +106,11 @@ def create_llm_from_key_type(
     """
     if key_type == "gemini_api_key":
         return create_gemini_model(api_key, temperature=temperature)
-    elif key_type == "deepseek_v3_key":
-        return create_deepseek_model(api_key, temperature=temperature)
+    elif key_type == "open_ai_key":
+        return create_openai_model(api_key, temperature=temperature)
     else:
-        raise ValueError(f"Unsupported key type: {key_type}. Supported types: 'gemini_api_key', 'deepseek_v3_key'")
+        raise ValueError(f"Unsupported key type: {key_type}. Supported types: 'gemini_api_key', 'open_ai_key'")
 
 
-__all__ = ['create_gemini_model', 'create_deepseek_model', 'create_llm_from_key_type']
+__all__ = ['create_gemini_model', 'create_openai_model', 'create_llm_from_key_type']
 

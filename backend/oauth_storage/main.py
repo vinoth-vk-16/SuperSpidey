@@ -196,7 +196,7 @@ async def check_keys_presence(user_email: str):
         # Get current selected key if it exists
         current_selected_key = data.get('current_selected_key')
 
-        # Look for keys with dotted notation (keys.gemini_api_key, keys.deepseek_v3_key, etc.)
+        # Look for keys with dotted notation (keys.gemini_api_key, keys.open_ai_key, etc.)
         available_keys = []
         for field_name in data.keys():
             if field_name.startswith('keys.'):
@@ -220,7 +220,7 @@ async def set_current_selected_key(user_email: str, request: CurrentKeyRequest):
     """
     try:
         # Validate that the selected key is one of the allowed types
-        allowed_keys = ["gemini_api_key", "deepseek_v3_key"]
+        allowed_keys = ["gemini_api_key", "open_ai_key"]
         if request.current_selected_key not in allowed_keys:
             raise HTTPException(status_code=400, detail=f"Invalid key type. Must be one of: {', '.join(allowed_keys)}")
 

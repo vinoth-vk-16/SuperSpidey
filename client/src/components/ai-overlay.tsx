@@ -129,17 +129,12 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
 
   const generateMutation = useMutation({
     mutationFn: async (prompt: string) => {
-      const apiKey = localStorage.getItem('gemini-api-key');
-      if (!apiKey) {
-        throw new Error('No API key found');
-      }
-      
       const userContext = buildUserContext();
-      
-      // Build request body
+
+      // Build request body - API key is now handled by backend
       const requestBody: any = {
         prompt,
-        api_key: apiKey
+        user_email: user?.email
       };
       
       // Add user context if available
@@ -292,10 +287,6 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
 
   const improveEmailMutation = useMutation({
     mutationFn: async ({ text, action, customPrompt }: { text: string; action: string; customPrompt?: string }) => {
-      const apiKey = localStorage.getItem('gemini-api-key');
-      if (!apiKey) {
-        throw new Error('No API key found');
-      }
       
       let prompt = '';
       if (action === 'custom' && customPrompt) {
@@ -313,11 +304,11 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
       
       const userContext = buildUserContext();
       
-      // Build request body
+      // Build request body - API key is now handled by backend
       const requestBody: any = {
         text: text,
         action: action,
-        api_key: apiKey,
+        user_email: user?.email,
         custom_prompt: action === 'custom' ? customPrompt : undefined
       };
       
@@ -359,8 +350,8 @@ const AIOverlay = forwardRef<AIOverlayRef, AIOverlayProps>(({ isOpen, onClose, o
         console.error('Unexpected improve-email response:', data);
         throw new Error('Invalid response format');
       }
-      
-      return { 
+
+      return {
         improvedText,
         subject: data.subject || '' // Update subject if provided
       };

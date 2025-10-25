@@ -127,7 +127,7 @@ Set the current selected key for a user.
 
 **Allowed Key Types:**
 - `gemini_api_key`
-- `deepseek_v3_key`
+- `open_ai_key`
 
 **Response:**
 ```json
@@ -141,7 +141,7 @@ Set the current selected key for a user.
 **Error Response (400):**
 ```json
 {
-  "detail": "Invalid key type. Must be one of: gemini_api_key, deepseek_v3_key"
+  "detail": "Invalid key type. Must be one of: gemini_api_key, open_ai_key"
 }
 ```
 
@@ -159,7 +159,7 @@ Collection: `google_oauth_credentials`
     - `key_type_1`: Encrypted key value
     - `key_type_2`: Encrypted key value
     - ...
-  - `current_selected_key`: Currently selected key type (e.g., "gemini_api_key" or "deepseek_v3_key")
+  - `current_selected_key`: Currently selected key type (e.g., "gemini_api_key" or "open_ai_key")
 
 ## Environment Variables
 

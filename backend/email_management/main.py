@@ -20,31 +20,63 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import html
 from email.utils import parseaddr
+import requests
+from openai import OpenAI
 
-# Import firestore key utilities from Spidey
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Spidey'))
-from utils.firestore_keys import fetch_api_key, get_firestore_client
-from utils.encryption import encrypt_value
+# Import required modules for encryption and firestore
+import firebase_admin
+from firebase_admin import credentials, firestore
+from cryptography.fernet import Fernet
+load_dotenv()
+
+# Environment variables loaded successfully
+
+# Initialize encryption and firestore
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+if not ENCRYPTION_KEY:
+    raise Exception("ENCRYPTION_KEY environment variable not found")
+
+# Initialize Firebase
+service_key_env = os.getenv('service_key')
+if not service_key_env:
+    raise Exception("service_key environment variable not found")
+
+try:
+    firebase_credentials = json.loads(service_key_env)
+    cred = credentials.Certificate(firebase_credentials)
+    firebase_admin.initialize_app(cred, name='email-management')
+except ValueError:
+    # Firebase already initialized
+    pass
+
+# Initialize encryption cipher and firestore client
+cipher = Fernet(ENCRYPTION_KEY.encode())
+db = firestore.client(firebase_admin.get_app('email-management'))
 
 
-def get_user_api_key(user_email: str) -> str:
+def decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt an API key using Fernet encryption"""
+    try:
+        decrypted = cipher.decrypt(encrypted_key.encode())
+        return decrypted.decode()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to decrypt API key: {str(e)}")
+
+
+def get_user_api_key(user_email: str) -> tuple[str, str]:
     """
-    Get the API key for a user based on their current selected key.
+    Get the API key and key type for a user based on their current selected key.
 
     Args:
         user_email: User's email address
 
     Returns:
-        Decrypted API key string
+        Tuple of (decrypted_api_key, key_type)
 
     Raises:
         HTTPException: If no current key is selected or key not found
     """
     try:
-        db = get_firestore_client()
-
         # Get user document
         doc_ref = db.collection('google_oauth_credentials').document(user_email)
         doc = doc_ref.get()
@@ -59,12 +91,19 @@ def get_user_api_key(user_email: str) -> str:
         if not current_key_type:
             raise HTTPException(status_code=400, detail=f"No API key selected for user {user_email}. Please select an API key first.")
 
-        # Fetch the selected key using the existing utility
-        api_key = fetch_api_key(user_email, current_key_type)
+        # Check if the encrypted key exists
+        key_field = f'keys.{current_key_type}'
+        if key_field not in doc_data:
+            raise HTTPException(status_code=404, detail=f"API key type '{current_key_type}' not configured for user {user_email}")
+
+        encrypted_key = doc_data[key_field]
+
+        # Decrypt the key using our local decryption function
+        api_key = decrypt_api_key(encrypted_key)
         if not api_key:
             raise HTTPException(status_code=404, detail=f"Selected API key '{current_key_type}' not found for user {user_email}")
 
-        return api_key
+        return api_key, current_key_type
 
     except HTTPException:
         raise
@@ -73,19 +112,7 @@ def get_user_api_key(user_email: str) -> str:
 
 
 # Load environment variables from .env file
-load_dotenv()
 
-# Load Firebase service account key from environment
-service_key_env = os.getenv('service_key')
-if not service_key_env:
-    raise Exception("service_key environment variable not found. Make sure it's set in the .env file")
-
-firebase_credentials = json.loads(service_key_env)
-cred = credentials.Certificate(firebase_credentials)
-firebase_admin.initialize_app(cred)
-
-# Initialize Firestore client
-db = firestore.client()
 
 # Load Google OAuth configuration from environment
 vite_google_cred = os.getenv('VITE_GOOGLE_CRED')
@@ -155,52 +182,54 @@ def clean_response_text(text: str) -> str:
     # Remove any remaining leading/trailing whitespace
     return cleaned.strip()
 
-async def generate_email_draft(prompt: str, api_key: str, context: Optional[str] = None, previous_email_context: Optional[str] = None) -> Dict[str, str]:
-    """Generate email draft using Gemini AI"""
+async def generate_email_draft(prompt: str, api_key: str, key_type: str, context: Optional[str] = None, previous_email_context: Optional[str] = None) -> Dict[str, str]:
+    """Generate email draft using AI (Gemini or DeepSeek)"""
     try:
         if not api_key or api_key.strip() == '':
             raise HTTPException(status_code=400, detail="API key is required")
 
-        genai.configure(api_key=api_key)
-        
-        # Try multiple models with fallback (newest to oldest)
-        model_names = [
-            'gemini-2.0-flash-exp',  # Latest experimental model
-            'gemini-exp-1206',        # December 2024 experimental
-            'gemini-1.5-pro',         # Stable Pro model
-            'gemini-pro'              # Fallback to older stable model
-        ]
-        
-        model = None
-        last_error = None
-        
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                print(f"✅ Using Gemini model: {model_name}")
-                break
-            except Exception as e:
-                last_error = e
-                print(f"⚠️ Model {model_name} not available: {str(e)}")
-                continue
-        
-        if model is None:
-            raise HTTPException(
-                status_code=503, 
-                detail=f"No Gemini models available. Last error: {str(last_error)}"
-            )
+        if key_type == "gemini_api_key":
+            # Use Google Gemini API
+            genai.configure(api_key=api_key)
 
-        system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query"."""
+            # Try multiple models with fallback (newest to oldest)
+            model_names = [
+                'gemini-2.5-flash-lite',
+                'gemini-2.5-flash',
+                'gemini-1.5-lite',
+                'gemini-1.0-pro',
+            ]
 
-        # Add user context if provided
-        if context:
-            system_prompt += f"\n\nUSER CONTEXT: {context}"
+            model = None
+            last_error = None
 
-        # Add previous email context if provided
-        if previous_email_context:
-            system_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to generate a more relevant and contextual email response."
+            for model_name in model_names:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    print(f"✅ Using Gemini model: {model_name}")
+                    break
+                except Exception as e:
+                    last_error = e
+                    print(f"⚠️ Model {model_name} not available: {str(e)}")
+                    continue
 
-        system_prompt += """
+            if model is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"No Gemini models available. Last error: {str(last_error)}"
+                )
+
+            system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query"."""
+
+            # Add user context if provided
+            if context:
+                system_prompt += f"\n\nUSER CONTEXT: {context}"
+
+            # Add previous email context if provided
+            if previous_email_context:
+                system_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to generate a more relevant and contextual email response."
+
+            system_prompt += """
 
 CRITICAL: Respond with a JSON object containing both subject and body fields. Structure your response EXACTLY like this:
 {
@@ -210,8 +239,61 @@ CRITICAL: Respond with a JSON object containing both subject and body fields. St
 
 The body should be a complete email with proper closing like "Thanks" or "Best regards" followed by {user name} at the end. The email should be professional and appropriate for business communication with complete structure including greeting, body, and proper closing with signature. NEVER include subject lines or headers in the body field."""
 
-        result = model.generate_content(f"{system_prompt}\n\nUser query: {prompt}")
-        response = result.text
+            result = model.generate_content(f"{system_prompt}\n\nUser query: {prompt}")
+            response = result.text
+
+        elif key_type == "open_ai_key":
+            # Use OpenAI API directly
+            client = OpenAI(api_key=api_key)
+
+            system_prompt = """Consider your job is to generate complete professional emails based on query. Make sure the email is concise and to the point. If you need to mention names anywhere, just fill them as {user name}, {receiver name}, {company name}. Important: never respond with any follow-up or random content, and make sure if there isn't a meaningful query then response must be "give a proper query"."""
+
+            # Add user context if provided
+            if context:
+                system_prompt += f"\n\nUSER CONTEXT: {context}"
+
+            # Add previous email context if provided
+            if previous_email_context:
+                system_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to generate a more relevant and contextual email response."
+
+            system_prompt += """
+
+CRITICAL: Respond with a JSON object containing both subject and body fields. Structure your response EXACTLY like this:
+{
+  "subject": "Brief descriptive subject line",
+  "body": "Complete email body starting with greeting and ending with proper signature"
+}
+
+The body should be a complete email with proper closing like "Thanks" or "Best regards" followed by {user name} at the end. The email should be professional and appropriate for business communication with complete structure including greeting, body, and proper closing with signature. NEVER include subject lines or headers in the body field."""
+
+            try:
+                completion = client.chat.completions.create(
+                    model="gpt-4o-mini",  # Using GPT-4o-mini for cost efficiency
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+                response = completion.choices[0].message.content
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"OpenAI API error: {str(e)}"
+                )
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported key type: {key_type}"
+            )
 
         # Clean up response text - remove code fences and extra whitespace
         cleaned_text = response.strip()
@@ -256,90 +338,168 @@ The body should be a complete email with proper closing like "Thanks" or "Best r
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate email draft: {str(e)}")
 
-async def improve_email(text: str, action: str, api_key: str, custom_prompt: Optional[str] = None, context: Optional[str] = None, previous_email_context: Optional[str] = None) -> str:
-    """Improve email using Gemini AI"""
+async def improve_email(text: str, action: str, api_key: str, key_type: str, custom_prompt: Optional[str] = None, context: Optional[str] = None, previous_email_context: Optional[str] = None) -> str:
+    """Improve email using AI (Gemini or DeepSeek)"""
     try:
         if not api_key or api_key.strip() == '':
             raise HTTPException(status_code=400, detail="API key is required")
 
-        genai.configure(api_key=api_key)
-        
-        # Try multiple models with fallback (newest to oldest)
-        model_names = [
-            'gemini-2.0-flash-exp',  # Latest experimental model
-            'gemini-exp-1206',        # December 2024 experimental
-            'gemini-1.5-pro',         # Stable Pro model
-            'gemini-pro'              # Fallback to older stable model
-        ]
-        
-        model = None
-        last_error = None
-        
-        for model_name in model_names:
-            try:
-                model = genai.GenerativeModel(model_name)
-                print(f"✅ Using Gemini model: {model_name}")
-                break
-            except Exception as e:
-                last_error = e
-                print(f"⚠️ Model {model_name} not available: {str(e)}")
-                continue
-        
-        if model is None:
-            raise HTTPException(
-                status_code=503, 
-                detail=f"No Gemini models available. Last error: {str(last_error)}"
-            )
+        if key_type == "gemini_api_key":
+            # Use Google Gemini API
+            genai.configure(api_key=api_key)
 
-        # If custom prompt is provided, use it directly but add output format instructions
-        if custom_prompt and action == "custom":
-            action_prompt = f"""{custom_prompt}
+            # Try multiple models with fallback (newest to oldest)
+            model_names = [
+                'gemini-2.0-flash-exp',  # Latest experimental model
+                'gemini-exp-1206',        # December 2024 experimental
+                'gemini-1.5-pro',         # Stable Pro model
+                'gemini-pro'              # Fallback to older stable model
+            ]
+
+            model = None
+            last_error = None
+
+            for model_name in model_names:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    print(f"✅ Using Gemini model: {model_name}")
+                    break
+                except Exception as e:
+                    last_error = e
+                    print(f"⚠️ Model {model_name} not available: {str(e)}")
+                    continue
+
+            if model is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"No Gemini models available. Last error: {str(last_error)}"
+                )
+
+            # If custom prompt is provided, use it directly but add output format instructions
+            if custom_prompt and action == "custom":
+                action_prompt = f"""{custom_prompt}
 
 CRITICAL: Respond ONLY with the email content. Do not include any explanations, options, or additional text. Just return the email."""
-        else:
-            # Use predefined prompts with structured output format
-            action_prompts = {
-                "improve": """Improve the writing style, clarity, and professionalism of this email while maintaining its meaning. Keep it concise and to the point.
+            else:
+                # Use predefined prompts with structured output format
+                action_prompts = {
+                    "improve": """Improve the writing style, clarity, and professionalism of this email while maintaining its meaning. Keep it concise and to the point.
 
 CRITICAL: Respond ONLY with the improved email content. Do not include any explanations, options, or additional text. Just return the cleaned, improved email.""",
-                "shorten": """Make this email more concise while preserving all important information.
+                    "shorten": """Make this email more concise while preserving all important information.
 
 CRITICAL: Respond ONLY with the shortened email content. Do not include any explanations, options, or additional text. Just return the concise email.""",
-                "lengthen": """Expand this email with more detail and context while maintaining professionalism.
+                    "lengthen": """Expand this email with more detail and context while maintaining professionalism.
 
 CRITICAL: Respond ONLY with the expanded email content. Do not include any explanations, options, or additional text. Just return the detailed email.""",
-                "fix-grammar": """Fix any spelling, grammar, and punctuation errors in this email.
+                    "fix-grammar": """Fix any spelling, grammar, and punctuation errors in this email.
 
 CRITICAL: Respond ONLY with the corrected email content. Do not include any explanations, options, or additional text. Just return the corrected email.""",
-                "simplify": """Simplify the language and structure of this email to make it easier to understand.
+                    "simplify": """Simplify the language and structure of this email to make it easier to understand.
 
 CRITICAL: Respond ONLY with the simplified email content. Do not include any explanations, options, or additional text. Just return the simplified email.""",
-                "rewrite": """Rewrite this email in a more natural, conversational tone while keeping it professional.
+                    "rewrite": """Rewrite this email in a more natural, conversational tone while keeping it professional.
 
 CRITICAL: Respond ONLY with the rewritten email content. Do not include any explanations, options, or additional text. Just return the rewritten email.""",
-                "write": """Write a complete professional email based on this prompt.
+                    "write": """Write a complete professional email based on this prompt.
 
 CRITICAL: Respond ONLY with the email content. Do not include any explanations, options, or additional text. Just return the email."""
-            }
-            action_prompt = action_prompts.get(action, """Improve this email.
+                }
+                action_prompt = action_prompts.get(action, """Improve this email.
 
 CRITICAL: Respond ONLY with the improved email content. Do not include any explanations, options, or additional text. Just return the cleaned email.""")
 
-        # Build the final prompt with context
-        final_prompt = action_prompt
+            # Build the final prompt with context
+            final_prompt = action_prompt
 
-        # Add user context if provided
-        if context:
-            final_prompt += f"\n\nUSER CONTEXT: {context}"
+            # Add user context if provided
+            if context:
+                final_prompt += f"\n\nUSER CONTEXT: {context}"
 
-        # Add previous email context if provided
-        if previous_email_context:
-            final_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to improve the email with better context and relevance."
+            # Add previous email context if provided
+            if previous_email_context:
+                final_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to improve the email with better context and relevance."
 
-        final_prompt += f"\n\n{text}"
+            final_prompt += f"\n\n{text}"
 
-        result = model.generate_content(final_prompt)
-        response = result.text
+            result = model.generate_content(final_prompt)
+            response = result.text
+
+        elif key_type == "open_ai_key":
+            # Use OpenAI API directly
+            client = OpenAI(api_key=api_key)
+
+            # If custom prompt is provided, use it directly but add output format instructions
+            if custom_prompt and action == "custom":
+                action_prompt = f"""{custom_prompt}
+
+CRITICAL: Respond ONLY with the email content. Do not include any explanations, options, or additional text. Just return the email."""
+            else:
+                # Use predefined prompts with structured output format
+                action_prompts = {
+                    "improve": """Improve the writing style, clarity, and professionalism of this email while maintaining its meaning. Keep it concise and to the point.
+
+CRITICAL: Respond ONLY with the improved email content. Do not include any explanations, options, or additional text. Just return the cleaned, improved email.""",
+                    "shorten": """Make this email more concise while preserving all important information.
+
+CRITICAL: Respond ONLY with the shortened email content. Do not include any explanations, options, or additional text. Just return the concise email.""",
+                    "lengthen": """Expand this email with more detail and context while maintaining professionalism.
+
+CRITICAL: Respond ONLY with the expanded email content. Do not include any explanations, options, or additional text. Just return the detailed email.""",
+                    "fix-grammar": """Fix any spelling, grammar, and punctuation errors in this email.
+
+CRITICAL: Respond ONLY with the corrected email content. Do not include any explanations, options, or additional text. Just return the corrected email.""",
+                    "simplify": """Simplify the language and structure of this email to make it easier to understand.
+
+CRITICAL: Respond ONLY with the simplified email content. Do not include any explanations, options, or additional text. Just return the simplified email.""",
+                    "rewrite": """Rewrite this email in a more natural, conversational tone while keeping it professional.
+
+CRITICAL: Respond ONLY with the rewritten email content. Do not include any explanations, options, or additional text. Just return the rewritten email.""",
+                    "write": """Write a complete professional email based on this prompt.
+
+CRITICAL: Respond ONLY with the email content. Do not include any explanations, options, or additional text. Just return the email."""
+                }
+                action_prompt = action_prompts.get(action, """Improve this email.
+
+CRITICAL: Respond ONLY with the improved email content. Do not include any explanations, options, or additional text. Just return the cleaned email.""")
+
+            # Build the final prompt with context
+            final_prompt = action_prompt
+
+            # Add user context if provided
+            if context:
+                final_prompt += f"\n\nUSER CONTEXT: {context}"
+
+            # Add previous email context if provided
+            if previous_email_context:
+                final_prompt += f"\n\nPREVIOUS CONVERSATION CONTEXT: {previous_email_context}\n\nUse this conversation history to improve the email with better context and relevance."
+
+            final_prompt += f"\n\n{text}"
+
+            try:
+                completion = client.chat.completions.create(
+                    model="gpt-4o-mini",  # Using GPT-4o-mini for cost efficiency
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": final_prompt
+                        }
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+                response = completion.choices[0].message.content
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"OpenAI API error: {str(e)}"
+                )
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported key type: {key_type}"
+            )
 
         return response or "Failed to improve email"
 
@@ -2087,12 +2247,13 @@ async def gmail_webhook(request: GmailWebhookRequest):
 async def generate_email(request: GenerateEmailRequest):
     """Generate email draft using Gemini AI"""
     try:
-        # Get the API key from Firebase based on user's selected key
-        api_key = get_user_api_key(request.user_email)
+        # Get the API key and key type from Firebase based on user's selected key
+        api_key, key_type = get_user_api_key(request.user_email)
 
         result = await generate_email_draft(
             request.prompt,
             api_key,
+            key_type,
             request.context,
             request.previous_email_context
         )
@@ -2104,20 +2265,21 @@ async def generate_email(request: GenerateEmailRequest):
 
 @app.post("/improve-email")
 async def improve_email_endpoint(request: ImproveEmailRequest):
-    """Improve email using Gemini AI with different actions"""
+    """Improve email using AI with different actions"""
     try:
-        # Get the API key from Firebase based on user's selected key
-        api_key = get_user_api_key(request.user_email)
+        # Get the API key and key type from Firebase based on user's selected key
+        api_key, key_type = get_user_api_key(request.user_email)
 
         improved_text = await improve_email(
             request.text,
             request.action,
             api_key,
+            key_type,
             request.custom_prompt,
             request.context,
             request.previous_email_context
         )
-        return ImproveEmailResponse(subject="", body=improved_text)
+        return {"improved_text": improved_text}
     except HTTPException:
         raise
     except Exception as e:
