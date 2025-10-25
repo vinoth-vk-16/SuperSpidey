@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_spidey_agent(api_key: str, key_type: str, **kwargs):
-    """
-    Create Spidey agent using the EXACT working pattern from test.py
-    """
+    
     # Use the exact same model setup as test.py
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash-lite",
@@ -35,7 +33,13 @@ def create_spidey_agent(api_key: str, key_type: str, **kwargs):
     # Define functions - exact from test.py
     def call_model(messages):
         # Add system message - exact from test.py
-        system_msg = SystemMessage(content="Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.")
+        content = """Your name is Spidey. You help users create multiple email drafts efficiently. You help users with their email needs.
+        When creating drafts, follow the following rules:
+        - When user describes his email, create the draft forming in the required format.
+        - Create the subject and body of the email in the way user describes it.
+        - User wont give the subject or body of the email, you need to create them based on the user's description.
+        """
+        system_msg = SystemMessage(content=content)
         full_messages = [system_msg] + messages
 
         try:
