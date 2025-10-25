@@ -72,10 +72,13 @@ class KeyStorageResponse(BaseModel):
     key_type: str
     message: str
 
-class KeyRetrievalResponse(BaseModel):
+class KeysPresenceResponse(BaseModel):
     user_email: str
-    key_type: str
-    key_value: str
+    available_keys: list[str]
+    current_selected_key: Optional[str] = None
+
+class CurrentKeyRequest(BaseModel):
+    current_selected_key: str
 
 @app.post("/store-auth")
 async def store_oauth_credentials(credentials: OAuthCredentials):
@@ -134,7 +137,7 @@ async def get_oauth_credentials(user_email: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve credentials: {str(e)}")
 
-@app.post("/store-key")
+@app.put("/store-key")
 async def store_encrypted_key(request: KeyStorageRequest):
     """
     Store an encrypted key for a user in Firestore under the keys object
@@ -161,10 +164,10 @@ async def store_encrypted_key(request: KeyStorageRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to store key: {str(e)}")
 
-@app.get("/get-key/{user_email}/{key_type}")
-async def get_encrypted_key(user_email: str, key_type: str):
+@app.get("/check-keys/{user_email}")
+async def check_keys_presence(user_email: str):
     """
-    Retrieve and decrypt a key for a user from Firestore
+    Get all available keys for a user in Firestore
     """
     try:
         # Reference to the document with user email as ID
@@ -174,31 +177,64 @@ async def get_encrypted_key(user_email: str, key_type: str):
         doc = doc_ref.get()
 
         if not doc.exists:
-            raise HTTPException(status_code=404, detail="No keys found for this user")
+            return KeysPresenceResponse(
+                user_email=user_email,
+                available_keys=[]
+            )
 
         data = doc.to_dict()
 
         # Check if keys object exists
         if 'keys' not in data:
-            raise HTTPException(status_code=404, detail="No keys object found for this user")
+            return KeysPresenceResponse(
+                user_email=user_email,
+                available_keys=[]
+            )
 
-        # Check if the specific key type exists
-        if key_type not in data['keys']:
-            raise HTTPException(status_code=404, detail=f"Key type '{key_type}' not found for this user")
+        # Get all available key types
+        available_keys = list(data['keys'].keys())
 
-        # Decrypt the key
-        decrypted_key = decrypt_key(data['keys'][key_type])
+        # Get current selected key if it exists
+        current_selected_key = data.get('current_selected_key')
 
-        return KeyRetrievalResponse(
+        return KeysPresenceResponse(
             user_email=user_email,
-            key_type=key_type,
-            key_value=decrypted_key
+            available_keys=available_keys,
+            current_selected_key=current_selected_key
         )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check keys presence: {str(e)}")
+
+@app.put("/set-current-key/{user_email}")
+async def set_current_selected_key(user_email: str, request: CurrentKeyRequest):
+    """
+    Set the current selected key for a user in Firestore
+    """
+    try:
+        # Validate that the selected key is one of the allowed types
+        allowed_keys = ["gemini_api_key", "deepseek_v3_key"]
+        if request.current_selected_key not in allowed_keys:
+            raise HTTPException(status_code=400, detail=f"Invalid key type. Must be one of: {', '.join(allowed_keys)}")
+
+        # Reference to the document with user email as ID
+        doc_ref = db.collection('google_oauth_credentials').document(user_email)
+
+        # Set the current selected key
+        doc_ref.set({
+            'current_selected_key': request.current_selected_key
+        }, merge=True)
+
+        return {
+            "user_email": user_email,
+            "current_selected_key": request.current_selected_key,
+            "message": "Current selected key updated successfully"
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve key: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to set current selected key: {str(e)}")
 
 @app.get("/health")
 async def health_check():

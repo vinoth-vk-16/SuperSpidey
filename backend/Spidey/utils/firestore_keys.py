@@ -145,5 +145,85 @@ def list_available_keys(user_email: str) -> Dict[str, bool]:
         return {}
 
 
-__all__ = ['initialize_firestore', 'get_firestore_client', 'fetch_api_key', 'list_available_keys']
+def get_user_selected_key(user_email: str) -> str:
+    """
+    Get the currently selected API key type for a user.
+
+    Args:
+        user_email: User's email
+
+    Returns:
+        Selected key type (e.g., 'gemini_api_key', 'deepseek_v3_key')
+
+    Raises:
+        ValueError: If user not found or no key selected
+    """
+    try:
+        db = get_firestore_client()
+
+        # Get user document
+        doc_ref = db.collection('google_oauth_credentials').document(user_email)
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            logger.error(f"User document not found for: {user_email}")
+            raise ValueError(f"User {user_email} not found in database")
+
+        doc_data = doc.to_dict()
+
+        # Check if current_selected_key exists
+        selected_key = doc_data.get('current_selected_key')
+        if not selected_key:
+            logger.error(f"No current selected key for user: {user_email}")
+            raise ValueError(f"No API key selected for user {user_email}. Please select an API key first.")
+
+        # Validate it's one of the allowed key types
+        allowed_keys = ["gemini_api_key", "deepseek_v3_key"]
+        if selected_key not in allowed_keys:
+            logger.error(f"Invalid selected key type '{selected_key}' for user: {user_email}")
+            raise ValueError(f"Invalid selected key type '{selected_key}' for user {user_email}")
+
+        logger.info(f"Retrieved selected key '{selected_key}' for user: {user_email}")
+        return selected_key
+
+    except ValueError:
+        # Re-raise ValueError with original message
+        raise
+    except Exception as e:
+        logger.error(f"Error getting selected key for {user_email}: {str(e)}")
+        raise ValueError(f"Failed to get selected key: {str(e)}")
+
+
+def get_user_api_key(user_email: str) -> str:
+    """
+    Get the API key for a user based on their currently selected key.
+
+    Args:
+        user_email: User's email address
+
+    Returns:
+        Decrypted API key string
+
+    Raises:
+        ValueError: If no current key is selected or key not found
+    """
+    try:
+        # Get the selected key type first
+        selected_key_type = get_user_selected_key(user_email)
+
+        # Then fetch the actual API key
+        api_key = fetch_api_key(user_email, selected_key_type)
+
+        logger.info(f"Successfully retrieved selected API key for user: {user_email}")
+        return api_key
+
+    except ValueError:
+        # Re-raise ValueError with original message
+        raise
+    except Exception as e:
+        logger.error(f"Error getting API key for {user_email}: {str(e)}")
+        raise ValueError(f"Failed to get API key: {str(e)}")
+
+
+__all__ = ['initialize_firestore', 'get_firestore_client', 'fetch_api_key', 'list_available_keys', 'get_user_selected_key', 'get_user_api_key']
 

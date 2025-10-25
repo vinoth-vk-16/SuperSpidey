@@ -67,8 +67,8 @@ Retrieve Google OAuth credentials for a user.
 }
 ```
 
-### POST /store-key
-Store an encrypted key for a user.
+### PUT /store-key
+Store or update an encrypted key for a user. Useful for updating expired keys.
 
 **Request Body:**
 ```json
@@ -88,26 +88,60 @@ Store an encrypted key for a user.
 }
 ```
 
-### GET /get-key/{user_email}/{key_type}
-Retrieve and decrypt a key for a user.
+### GET /check-keys/{user_email}
+Get all available keys for a user.
 
 **Path Parameters:**
 - `user_email`: The email address of the user
-- `key_type`: The type of key to retrieve
+
+**Response when keys exist:**
+```json
+{
+  "user_email": "user@example.com",
+  "available_keys": ["gemini_api_key", "another_key_type"],
+  "current_selected_key": "gemini_api_key"
+}
+```
+
+**Response when no keys exist:**
+```json
+{
+  "user_email": "user@example.com",
+  "available_keys": [],
+  "current_selected_key": null
+}
+```
+
+### PUT /set-current-key/{user_email}
+Set the current selected key for a user.
+
+**Path Parameters:**
+- `user_email`: The email address of the user
+
+**Request Body:**
+```json
+{
+  "current_selected_key": "gemini_api_key"
+}
+```
+
+**Allowed Key Types:**
+- `gemini_api_key`
+- `deepseek_v3_key`
 
 **Response:**
 ```json
 {
   "user_email": "user@example.com",
-  "key_type": "api_key",
-  "key_value": "your-secret-key-here"
+  "current_selected_key": "gemini_api_key",
+  "message": "Current selected key updated successfully"
 }
 ```
 
-**Error Response (404):**
+**Error Response (400):**
 ```json
 {
-  "detail": "Key type 'api_key' not found for this user"
+  "detail": "Invalid key type. Must be one of: gemini_api_key, deepseek_v3_key"
 }
 ```
 
@@ -125,6 +159,7 @@ Collection: `google_oauth_credentials`
     - `key_type_1`: Encrypted key value
     - `key_type_2`: Encrypted key value
     - ...
+  - `current_selected_key`: Currently selected key type (e.g., "gemini_api_key" or "deepseek_v3_key")
 
 ## Environment Variables
 

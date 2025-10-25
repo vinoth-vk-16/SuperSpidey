@@ -18,7 +18,7 @@ from langchain.schema import HumanMessage
 # Import agent and utilities
 from agents import create_spidey_agent
 from utils.helpers import sanitize_input, validate_email
-from utils.firestore_keys import fetch_api_key, initialize_firestore
+from utils.firestore_keys import get_user_api_key, get_user_selected_key, initialize_firestore
 
 # Configure logging
 logging.basicConfig(
@@ -58,7 +58,6 @@ app.add_middleware(
 class SpideyRequest(BaseModel):
     """Request model for Spidey agent"""
     user_email: str = Field(..., description="User's email address")
-    key_type: str = Field(..., description="Type of AI key: 'gemini_api_key' or 'deepseek_v3_key'")
     task: str = Field(..., description="Task description")
     previous_convo: Optional[str] = Field(None, description="Previous conversation history")
     thread_ids: Optional[List[str]] = Field(None, description="Thread IDs to query (for conversation analysis)")
@@ -140,18 +139,12 @@ async def invoke_spidey(request: SpideyRequest):
                 status_code=400,
                 detail="Invalid user email address"
             )
-        
-        # Validate key_type
-        if request.key_type not in ["gemini_api_key", "deepseek_v3_key"]:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid key_type. Must be 'gemini_api_key' or 'deepseek_v3_key'"
-            )
-        
-        # Fetch API key from Firestore
+
+        # Fetch the user's selected API key and key type from Firestore
         try:
-            api_key = fetch_api_key(request.user_email, request.key_type)
-            logger.info(f"Successfully fetched {request.key_type} for user: {request.user_email}")
+            api_key = get_user_api_key(request.user_email)
+            key_type = get_user_selected_key(request.user_email)
+            logger.info(f"Successfully fetched selected {key_type} for user: {request.user_email}")
         except ValueError as e:
             raise HTTPException(
                 status_code=404,
@@ -175,7 +168,7 @@ async def invoke_spidey(request: SpideyRequest):
             )
         
         # Get or create agent
-        agent = get_or_create_agent(api_key, request.key_type, request.user_email)
+        agent = get_or_create_agent(api_key, key_type, request.user_email)
         
         # Build messages - exact pattern from test.py
         messages = []

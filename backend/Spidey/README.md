@@ -22,6 +22,7 @@ Spidey is an intelligent email automation agent built with **LangGraph State Mac
 - **Secure API Key Storage**: Encrypted keys stored in Firestore, decrypted server-side
 - **Per-Request Authentication**: API keys never stored in memory or exposed to frontend
 - **Multi-Tenant Ready**: Each user has isolated encrypted keys
+- **Automatic Key Selection**: Uses user's currently selected API key (gemini_api_key or deepseek_v3_key)
 
 ## 🛠️ Technology Stack
 
@@ -154,8 +155,8 @@ if response.tool_calls:
 class AgentState(TypedDict):
     messages: List[BaseMessage]  # Full conversation history
     user_email: str              # User identification
-    key_type: str                # AI model selection
-    api_key: str                 # Decrypted API key
+    key_type: str                # AI model selection (auto-detected from Firebase)
+    api_key: str                 # Decrypted API key (auto-retrieved from Firebase)
     error: Optional[str]         # Error tracking
 ```
 
@@ -247,7 +248,6 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 ```json
 {
   "user_email": "user@example.com",
-  "key_type": "gemini_api_key",
   "task": "Create an email draft to john@example.com about our new product",
   "previous_convo": "Optional previous conversation history...",
   "thread_ids": ["thread123", "thread456"],  // Optional: for specific thread analysis
@@ -265,8 +265,7 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 ```
 
 **Parameters:**
-- `user_email` (required): User's email address for tool execution
-- `key_type` (required): `"gemini_api_key"` for Google Gemini
+- `user_email` (required): User's email address for tool execution and API key retrieval
 - `task` (required): User's request or message
 - `previous_convo` (optional): Previous conversation history
 - `thread_ids` (optional): Array of thread IDs for conversation analysis
@@ -274,8 +273,9 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 **Features:**
 - LLM-driven tool selection (no hardcoded rules)
 - Automatic thread analysis when thread_ids provided
-- Secure API key fetching from Firestore
+- Secure API key fetching from Firestore (uses user's currently selected key)
 - LangGraph StateGraph workflow management
+- Automatic key type detection (gemini_api_key or deepseek_v3_key)
 
 **Tool Usage Examples:**
 
@@ -284,7 +284,6 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 // Request
 {
   "user_email": "user@example.com",
-  "key_type": "gemini_api_key",
   "task": "Create an email to john@example.com about our new product"
 }
 
@@ -301,7 +300,6 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 // Request
 {
   "user_email": "user@example.com",
-  "key_type": "gemini_api_key",
   "task": "What did the customer complain about?",
   "thread_ids": ["thread123"]
 }
@@ -319,7 +317,6 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 // Request
 {
   "user_email": "user@example.com",
-  "key_type": "gemini_api_key",
   "task": "Summarize my recent emails and show me any unread ones",
   "page": 1
 }
@@ -337,7 +334,6 @@ The server will start on `http://localhost:8004` (or your specified PORT).
 // Request
 {
   "user_email": "user@example.com",
-  "key_type": "gemini_api_key",
   "task": "How should I write a follow-up email?"
 }
 
@@ -609,7 +605,6 @@ curl -X POST http://localhost:8004/invoke \
   -H "Content-Type: application/json" \
   -d '{
     "user_email": "test@example.com",
-    "key_type": "gemini_api_key",
     "task": "Hi"
   }'
 

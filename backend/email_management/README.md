@@ -458,13 +458,13 @@ Start Gmail watch for a user to enable real-time email notifications.
 - Returns existing watch info if already active
 
 ### POST /generate-email
-Generate email draft using Gemini AI. Supports optional user context and previous conversation context for more personalized and relevant emails.
+Generate email draft using Gemini AI. Uses the user's currently selected API key from Firebase. Supports optional user context and previous conversation context for more personalized and relevant emails.
 
 **Request Body:**
 ```json
 {
   "prompt": "Write a professional email to request a meeting with the CEO",
-  "api_key": "your-gemini-api-key",
+  "user_email": "user@example.com",
   "context": "I am a software developer at TechCorp, specializing in AI applications",  // Optional: User context for personalization
   "previous_email_context": "Previous email thread content here..."  // Optional: Previous emails in the thread for better context
 }
@@ -484,14 +484,14 @@ Generate email draft using Gemini AI. Supports optional user context and previou
 - Handles various email types and scenarios
 
 ### POST /improve-email
-Improve or modify email content using Gemini AI with different actions. Returns clean, properly formatted email content without explanations or multiple options. Supports optional user context and previous conversation context for more personalized improvements.
+Improve or modify email content using Gemini AI with different actions. Uses the user's currently selected API key from Firebase. Returns clean, properly formatted email content without explanations or multiple options. Supports optional user context and previous conversation context for more personalized improvements.
 
 **Request Body:**
 ```json
 {
   "text": "Your email content here...",
   "action": "improve",  // Options: write, shorten, simplify, improve, lengthen, fix-grammar, rewrite, custom
-  "api_key": "your-gemini-api-key",
+  "user_email": "user@example.com",
   "custom_prompt": "optional custom prompt for 'custom' action",
   "context": "I am a software developer at TechCorp, specializing in AI applications",  // Optional: User context for personalization
   "previous_email_context": "Previous email thread content here..."  // Optional: Previous emails in the thread for better context

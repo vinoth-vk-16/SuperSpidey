@@ -21,6 +21,57 @@ import google.generativeai as genai
 import html
 from email.utils import parseaddr
 
+# Import firestore key utilities from Spidey
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Spidey'))
+from utils.firestore_keys import fetch_api_key, get_firestore_client
+from utils.encryption import encrypt_value
+
+
+def get_user_api_key(user_email: str) -> str:
+    """
+    Get the API key for a user based on their current selected key.
+
+    Args:
+        user_email: User's email address
+
+    Returns:
+        Decrypted API key string
+
+    Raises:
+        HTTPException: If no current key is selected or key not found
+    """
+    try:
+        db = get_firestore_client()
+
+        # Get user document
+        doc_ref = db.collection('google_oauth_credentials').document(user_email)
+        doc = doc_ref.get()
+
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail=f"User {user_email} not found")
+
+        doc_data = doc.to_dict()
+
+        # Check if current_selected_key exists
+        current_key_type = doc_data.get('current_selected_key')
+        if not current_key_type:
+            raise HTTPException(status_code=400, detail=f"No API key selected for user {user_email}. Please select an API key first.")
+
+        # Fetch the selected key using the existing utility
+        api_key = fetch_api_key(user_email, current_key_type)
+        if not api_key:
+            raise HTTPException(status_code=404, detail=f"Selected API key '{current_key_type}' not found for user {user_email}")
+
+        return api_key
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get API key: {str(e)}")
+
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -481,7 +532,7 @@ class GmailWebhookRequest(BaseModel):
 
 class GenerateEmailRequest(BaseModel):
     prompt: str
-    api_key: str
+    user_email: str
     context: Optional[str] = None  # Context about the user to personalize the email
     previous_email_context: Optional[str] = None  # Previous emails in the thread for better context
 
@@ -492,7 +543,7 @@ class GenerateEmailResponse(BaseModel):
 class ImproveEmailRequest(BaseModel):
     text: str
     action: str  # write, shorten, simplify, improve, lengthen, fix-grammar, rewrite, custom
-    api_key: str
+    user_email: str
     custom_prompt: Optional[str] = None
     context: Optional[str] = None  # Context about the user to personalize the email
     previous_email_context: Optional[str] = None  # Previous emails in the thread for better context
@@ -2036,9 +2087,12 @@ async def gmail_webhook(request: GmailWebhookRequest):
 async def generate_email(request: GenerateEmailRequest):
     """Generate email draft using Gemini AI"""
     try:
+        # Get the API key from Firebase based on user's selected key
+        api_key = get_user_api_key(request.user_email)
+
         result = await generate_email_draft(
             request.prompt,
-            request.api_key,
+            api_key,
             request.context,
             request.previous_email_context
         )
@@ -2052,10 +2106,13 @@ async def generate_email(request: GenerateEmailRequest):
 async def improve_email_endpoint(request: ImproveEmailRequest):
     """Improve email using Gemini AI with different actions"""
     try:
+        # Get the API key from Firebase based on user's selected key
+        api_key = get_user_api_key(request.user_email)
+
         improved_text = await improve_email(
             request.text,
             request.action,
-            request.api_key,
+            api_key,
             request.custom_prompt,
             request.context,
             request.previous_email_context

@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState<string>('gemini_api_key');
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [isApiSaved, setIsApiSaved] = useState(false);
+  const [isFetchingKey, setIsFetchingKey] = useState(false);
   
   // User Info states
   const [userName, setUserName] = useState('');
@@ -79,19 +80,10 @@ export default function SettingsPage() {
     }
   }, [userInfoData]);
 
-  // Load API key and model selection from localStorage
+  // Load model selection from localStorage
   useEffect(() => {
     const savedModel = localStorage.getItem('ai-model-type') || 'gemini_api_key';
     setSelectedModel(savedModel);
-
-    const savedKey = localStorage.getItem(`api-key-${savedModel}`);
-    if (savedKey) {
-      setApiKey(savedKey);
-      setIsApiSaved(true);
-    } else {
-      setApiKey('');
-      setIsApiSaved(false);
-    }
   }, []);
 
   // Save selected model to localStorage when it changes
@@ -99,17 +91,33 @@ export default function SettingsPage() {
     localStorage.setItem('ai-model-type', selectedModel);
   }, [selectedModel]);
 
-  // Load API key when model changes
+  // Fetch and display API key for selected model
   useEffect(() => {
-    const savedKey = localStorage.getItem(`api-key-${selectedModel}`);
-    if (savedKey) {
-      setApiKey(savedKey);
-      setIsApiSaved(true);
-    } else {
-      setApiKey('');
-      setIsApiSaved(false);
-    }
-  }, [selectedModel]);
+    const fetchApiKey = async () => {
+      if (!user?.email) return;
+
+      setIsFetchingKey(true);
+      try {
+        const response = await fetch(`https://superspidey-oauth.onrender.com/get-key/${user.email}/${selectedModel}`);
+        if (response.ok) {
+          const data = await response.json();
+          setApiKey(data.key_value || '');
+          setIsApiSaved(true);
+        } else {
+          setApiKey('');
+          setIsApiSaved(false);
+        }
+      } catch (error) {
+        console.error('Error fetching API key:', error);
+        setApiKey('');
+        setIsApiSaved(false);
+      } finally {
+        setIsFetchingKey(false);
+      }
+    };
+
+    fetchApiKey();
+  }, [selectedModel, user?.email]);
 
   // Save/Update user info mutation
   const saveUserInfoMutation = useMutation({
@@ -193,12 +201,8 @@ export default function SettingsPage() {
         throw new Error(errorData.detail || 'Failed to store API key');
       }
 
-      // Also save in localStorage for quick access
-      localStorage.setItem(`api-key-${selectedModel}`, apiKey.trim());
-      // Save the selected model type
-      localStorage.setItem('ai-model-type', selectedModel);
       setIsApiSaved(true);
-      
+
       const modelLabel = AI_MODELS.find(m => m.value === selectedModel)?.label || 'AI model';
       toast({
         title: "Success",
@@ -413,23 +417,28 @@ export default function SettingsPage() {
               <Input
                 id="apiKey"
                 type="password"
-                placeholder={`Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
+                placeholder={isFetchingKey ? 'Loading...' : `Enter your ${AI_MODELS.find(m => m.value === selectedModel)?.label || 'API'} key`}
                 value={apiKey}
                           onChange={(e) => {
                             setApiKey(e.target.value);
                             setIsApiSaved(false);
                           }}
+                          disabled={isFetchingKey}
                           className="w-full pr-10 rounded-xl"
                 data-testid="input-api-key"
               />
-                        {isApiSaved && !isApiLoading && (
+                        {isFetchingKey ? (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : isApiSaved && !isApiLoading && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             <Check className="w-4 h-4 text-green-600" />
                           </div>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Your API key is stored locally and never sent to our servers
+                        Your API key is encrypted and stored securely on our servers
                       </p>
             </div>
             
@@ -437,7 +446,7 @@ export default function SettingsPage() {
                     <div className="flex justify-end pt-2">
             <Button
                         onClick={handleApiSave}
-                        disabled={isApiLoading || (isApiSaved && apiKey === localStorage.getItem(`api-key-${selectedModel}`))}
+                        disabled={isApiLoading || isFetchingKey}
                         className="btn-superhuman bg-primary hover:brightness-110 text-primary-foreground px-8"
               data-testid="button-save-api-key"
             >
