@@ -5,7 +5,8 @@ google-auth
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
-firebase-admin
+firebase-admin>=6.5.0,<7.0.0
+httpx[http2]>=0.27.0
 python-dotenv
 google-generativeai
 openai
