@@ -107,8 +107,8 @@ async def store_oauth_credentials(credentials: OAuthCredentials):
         if credentials.refresh_token:
             oauth_data['refresh_token'] = credentials.refresh_token
 
-        # Set the document
-        doc_ref.set(oauth_data)
+        # Set the document with merge=True to preserve existing keys
+        doc_ref.set(oauth_data, merge=True)
 
         return {
             "message": "OAuth credentials stored successfully",

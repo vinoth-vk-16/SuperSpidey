@@ -22,6 +22,10 @@ import html
 from email.utils import parseaddr
 import requests
 from openai import OpenAI
+from fastapi import UploadFile, File, Form
+
+# Import Supabase storage functions
+from supabase_storage import upload_resume_to_supabase, delete_resume_from_supabase, get_resume_download_url
 
 # Import required modules for encryption and firestore
 import firebase_admin
@@ -773,6 +777,19 @@ class StartWatchRequest(BaseModel):
     user_email: str
     access_token: str
     topic_name: str = "projects/contact-remedy/topics/gmail-notifications"
+
+class StoreResumeResponse(BaseModel):
+    user_email: str
+    message: str
+    success: bool
+
+class DeleteResumeRequest(BaseModel):
+    user_email: str
+
+class DeleteResumeResponse(BaseModel):
+    user_email: str
+    message: str
+    success: bool
 
 def get_user_credentials(user_email: str):
     """Get user OAuth credentials directly from Firestore google_oauth_credentials collection"""
@@ -2606,6 +2623,159 @@ async def start_gmail_watch(request: StartWatchRequest):
     except Exception as e:
         print(f"Unexpected error in start-watch: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/store-resume")
+async def store_resume(user_email: str = Form(...), file: UploadFile = File(...)):
+    """
+    Store a resume PDF in Supabase and update Firebase with the path.
+    
+    Args:
+        user_email: User's email address (form field)
+        file: PDF file to upload
+        
+    Returns:
+        StoreResumeResponse with storage path and success status
+    """
+    try:
+        # Upload to Supabase
+        storage_path, file_path = await upload_resume_to_supabase(user_email, file)
+        
+        # Update Firebase with resume path
+        try:
+            user_ref = db.collection('users').document(user_email)
+            
+            # Check if user document exists
+            user_doc = user_ref.get()
+            if not user_doc.exists:
+                # Create user document if it doesn't exist
+                user_ref.set({
+                    'Resume': storage_path
+                }, merge=True)
+            else:
+                # Update existing document
+                user_ref.update({
+                    'Resume': storage_path
+                })
+            
+            print(f"✅ Updated Firebase with resume path for {user_email}")
+            
+        except Exception as firebase_error:
+            # If Firebase update fails, try to clean up Supabase upload
+            print(f"❌ Firebase update failed: {str(firebase_error)}")
+            try:
+                delete_resume_from_supabase(storage_path)
+                print(f"🧹 Cleaned up Supabase upload after Firebase failure")
+            except:
+                pass
+            raise HTTPException(status_code=500, detail=f"Failed to update database: {str(firebase_error)}")
+        
+        return StoreResumeResponse(
+            user_email=user_email,
+            message="Resume stored successfully",
+            success=True
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in store-resume: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to store resume: {str(e)}")
+
+
+@app.delete("/delete-resume")
+async def delete_resume(request: DeleteResumeRequest):
+    """
+    Delete a resume from both Supabase storage and Firebase database.
+    
+    Args:
+        request: DeleteResumeRequest with user_email
+        
+    Returns:
+        DeleteResumeResponse with success status
+    """
+    try:
+        user_email = request.user_email
+        
+        # Get resume path from Firebase
+        user_ref = db.collection('users').document(user_email)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_data = user_doc.to_dict()
+        resume_path = user_data.get('Resume')
+        
+        if not resume_path:
+            raise HTTPException(status_code=404, detail="No resume found for this user")
+        
+        # Delete from Supabase
+        delete_resume_from_supabase(resume_path)
+        
+        # Delete from Firebase
+        try:
+            user_ref.update({
+                'Resume': firestore.DELETE_FIELD
+            })
+            print(f"✅ Deleted resume path from Firebase for {user_email}")
+        except Exception as firebase_error:
+            print(f"⚠️ Firebase deletion warning: {str(firebase_error)}")
+            # Continue even if Firebase update fails since Supabase deletion succeeded
+        
+        return DeleteResumeResponse(
+            user_email=user_email,
+            message="Resume deleted successfully",
+            success=True
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in delete-resume: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete resume: {str(e)}")
+
+
+@app.get("/get-resume-url/{user_email}")
+async def get_resume_url(user_email: str):
+    """
+    Get a signed download URL for a user's resume.
+    
+    Args:
+        user_email: User's email address
+        
+    Returns:
+        Dict with signed_url (valid for 1 hour)
+    """
+    try:
+        # Get resume path from Firebase
+        user_ref = db.collection('users').document(user_email)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_data = user_doc.to_dict()
+        resume_path = user_data.get('Resume')
+        
+        if not resume_path:
+            raise HTTPException(status_code=404, detail="No resume found for this user")
+        
+        # Get signed URL from Supabase
+        signed_url = get_resume_download_url(resume_path, expires_in=3600)
+        
+        return {
+            "user_email": user_email,
+            "signed_url": signed_url,
+            "expires_in": 3600,
+            "message": "Resume URL generated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in get-resume-url: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get resume URL: {str(e)}")
+
 
 @app.get("/health")
 async def health_check():

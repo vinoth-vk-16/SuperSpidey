@@ -115,7 +115,7 @@ export default function DraftsPage() {
       <div className="h-screen flex bg-background">
         <Sidebar />
         <div className="w-96 bg-background flex-shrink-0">
-          <SpideyChat className="h-full" />
+          <SpideyChat className="h-full" currentPage={1} selectedThreadIds={new Set()} />
         </div>
         <div className="flex-1 p-2 pr-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex flex-col">
@@ -153,7 +153,7 @@ export default function DraftsPage() {
       <div className="h-screen flex bg-background">
         <Sidebar />
         <div className="w-96 bg-background flex-shrink-0">
-          <SpideyChat className="h-full" />
+          <SpideyChat className="h-full" currentPage={1} selectedThreadIds={new Set()} />
         </div>
         <div className="flex-1 p-2 pr-2">
           <div className="h-full bg-card rounded-tl-3xl rounded-tr-3xl overflow-hidden flex items-center justify-center">

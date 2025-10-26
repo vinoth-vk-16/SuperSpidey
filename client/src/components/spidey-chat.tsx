@@ -15,6 +15,8 @@ interface Message {
 
 interface SpideyChatProps {
   className?: string;
+  currentPage?: number;
+  selectedThreadIds?: Set<string>;
 }
 
 interface UserInfo {
@@ -28,7 +30,7 @@ const SendIcon = ({ className }: { className?: string }) => (
   <img src="/send.svg" alt="Send" className={className} />
 );
 
-export default function SpideyChat({ className = '' }: SpideyChatProps) {
+export default function SpideyChat({ className = '', currentPage = 1, selectedThreadIds }: SpideyChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -124,6 +126,10 @@ export default function SpideyChat({ className = '' }: SpideyChatProps) {
           task: inputValue,
           context: buildContext(),
           previous_convo: conversationHistory,
+          page: currentPage,
+          ...(selectedThreadIds && selectedThreadIds.size > 0 && {
+            thread_ids: Array.from(selectedThreadIds)
+          }),
         }),
       });
 

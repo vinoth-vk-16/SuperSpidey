@@ -211,7 +211,7 @@ export default function InboxPage() {
       
       {/* Spidey Chat Section */}
       <div className="w-96 bg-background flex-shrink-0">
-        <SpideyChat className="h-full" />
+        <SpideyChat className="h-full" currentPage={currentPage} selectedThreadIds={selectedThreadIds} />
                   </div>
 
       {/* Main Content Box with 8px margin */}
