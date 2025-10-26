@@ -13,3 +13,4 @@ openai
 cryptography
 requests
 supabase
+gunicorn
